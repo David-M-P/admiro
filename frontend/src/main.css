@@ -1,0 +1,250 @@
+:root {
+  font-family: 'InstitutionFont', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(0, 0, 0, 0.87);
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ag-theme-alpine .ag-paging-panel {
+  width: 100%;
+  /* make the panel span the full grid width */
+  display: flex !important;
+  justify-content: center !important;
+  /* center its contents */
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  padding-left: 1.5%;
+  padding-right: 1.5%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+@font-face {
+  font-family: 'InstitutionFont';
+  src: url('/fonts/au_passata.woff2') format('woff2'),
+    url('/fonts/au_passata.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
+
+/* tooltip.css */
+.tooltip {
+  opacity: 0;
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px;
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.2s ease-in-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-family: 'InstitutionFont', sans-serif;
+  font-size: 12px;
+  color: #000000;
+}
+
+
+
+
+.outlet {
+  flex-grow: 1;
+  /* Takes up the remaining space */
+  overflow-y: hidden;
+  /* Allows scrolling if content exceeds height */
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  /*   min-width: 320px;
+  min-height: 100vh; */
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+button:hover {
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+
+  a:hover {
+    color: #747bff;
+  }
+
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+.contrast-text {
+  color: #1a1a1a;
+}
+
+/* global.css */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'InstitutionFont', sans-serif;
+}
+
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 1rem 0;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 0px;
+}
+
+/* Custom scrollbar styles */
+.custom-scrollbar {
+  scrollbar-width: none;
+  /* For Firefox */
+  scrollbar-color: #ffffff #f1f1f1;
+  /* Color for Firefox */
+}
+
+/* For Chrome, Safari, and Edge */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 1px;
+  /* Adjust the width of the scrollbar */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #ffffff;
+  /* Background color of the scrollbar track */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(0, 0%, 100%);
+  /* Color of the scrollbar handle */
+  border-radius: 10px;
+  /* Roundness of the scrollbar handle */
+  border: 2px solid #f1f1f1;
+  /* Adds space around the handle */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #ffffff;
+  /* Color on hover */
+}
+
+.map-container {
+  position: relative;
+  /* Create a stacking context for the map */
+  z-index: 1;
+  /* Keep the map below other elements */
+}
+
+.leaflet-container {
+  position: relative;
+  z-index: 1;
+  /* Ensure the map is visible but not above buttons */
+}
+
+.button-container {
+  position: absolute;
+  /* Position the buttons absolutely */
+  bottom: 10px;
+  /* Adjust position as needed */
+  right: 45px;
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  z-index: 9999;
+  /* Ensure buttons are above the map */
+  pointer-events: auto;
+  /* Ensure the buttons remain clickable */
+}
+
+.custom-data-grid .super-app-theme--header {
+  background-color: #003d73;
+  /* Header background color */
+  color: #FFFFFF;
+  /* Header text color for contrast */
+  font-weight: bold;
+  /* Bold text for visibility */
+  text-align: center;
+  /* Center text alignment */
+}
+
+.custom-data-grid .MuiDataGrid-cell {
+  background-color: #FFFFFF;
+  color: #000000;
+  /* Cell text color */
+}

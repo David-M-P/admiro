@@ -1,0 +1,30 @@
+export interface DataPoint {
+  ind: string;
+  dat: string;
+  oda: string;
+  lin: string;
+  reg: string;
+  pop: string;
+  chrom: string;
+  hap: number;
+  start: number;
+  end: number;
+  length: number;
+  snps: number;
+  mean_prob: number;
+  anc: string;
+  arc: number;
+  alt: number;
+  cha: number;
+  den: number;
+  vin: number;
+  car: number;
+  cne: number;
+  pal: number;
+  pch: number;
+  pde: number;
+  pvi: number;
+  fac_x: string | null;
+  fac_y: string | null;
+  color: string;
+}

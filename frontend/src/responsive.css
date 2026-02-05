@@ -1,0 +1,21 @@
+/* responsive.css */
+@media (max-width: 768px) {
+    .grid-container {
+      grid-template-columns: 1fr;
+    }
+  
+    .side-filter {
+      display: none; /* Hide side filter on small screens */
+    }
+  
+    .full-width {
+      width: 100%;
+    }
+  }
+  
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .side-filter {
+      width: 250px;
+    }
+  }
+  

@@ -1,0 +1,30 @@
+/* layout.css */
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  
+  .full-height {
+    height: 100vh;
+  }
+  
+  .flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .padding-sm {
+    padding: 10px;
+  }
+  
+  .padding-md {
+    padding: 20px;
+  }
+  
+  .padding-lg {
+    padding: 40px;
+  }
+  
+  

@@ -1,0 +1,25 @@
+# envs
+.env
+.env.*
+**/.env
+**/.env.*
+
+# local outputs / test artifacts
+backend/resp*.json*
+backend/resp.raw
+backend/headers.txt
+
+# python
+__pycache__/
+*.pyc
+
+# data data
+../data/
+data/
+*.parquet
+
+# python/node noise
+**/__pycache__/
+**/.pytest_cache/
+**/node_modules/
+**/dist/

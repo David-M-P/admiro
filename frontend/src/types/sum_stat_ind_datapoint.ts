@@ -1,0 +1,34 @@
+export interface DataPoint {
+  ind: string;
+  dat: string;
+  chrom: string;
+  anc: string;
+  hap: number;
+  len_mea: number;
+  len_med: number;
+  len_max: number;
+  len_min: number;
+  nfr: number;
+  seq: number;
+  sex: string;
+  pop: string;
+  reg: string;
+  oda: string;
+  tim: number;
+  lat: number;
+  lon: number;
+  jitteredLat?: number;
+  jitteredLon?: number;
+  cre: string;
+  cda: string;
+  lin: string;
+  ancAMR: number | null;
+  ancEAS: number | null;
+  ancSAS: number | null;
+  ancAFR: number | null;
+  ancEUR: number | null;
+  ancOCE: number | null;
+  fac_x: string | null;
+  fac_y: string | null;
+  color: string;
+}

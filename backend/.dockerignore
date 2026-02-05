@@ -1,0 +1,20 @@
+# Byte-compiled / cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Git
+.git/
+.gitignore
+
+# Local data (you’ll use Azure Blob in prod)
+data/
+
+# Docker artifacts
+Dockerfile*
+docker-compose*
