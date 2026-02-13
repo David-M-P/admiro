@@ -26,3 +26,7 @@ data/
 **/.pytest_cache/
 **/node_modules/
 **/dist/
+
+**/*.tsbuildinfo
+.vite/
+*.log
