@@ -17,9 +17,17 @@ __pycache__/
 ../data/
 data/
 *.parquet
+!backend/src/admiro_backend/services/static/metadata.parquet
+
+**/*.tsbuildinfo
+
 
 # python/node noise
 **/__pycache__/
 **/.pytest_cache/
 **/node_modules/
 **/dist/
+
+**/*.tsbuildinfo
+.vite/
+*.log
