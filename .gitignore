@@ -17,6 +17,7 @@ __pycache__/
 ../data/
 data/
 *.parquet
+!backend/src/admiro_backend/services/static/metadata.parquet
 
 **/*.tsbuildinfo
 
