@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - ADMIRO_ENV=local
+      - ADMIRO_CORS_ORIGINS=*
+      - ADMIRO_LOCAL_DATA_ROOT=/data/v1
+    volumes:
+      - ../data:/data:ro
+    ports:
+      - "8000:8000"

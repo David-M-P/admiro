@@ -11,6 +11,7 @@ from starlette.middleware.gzip import GZipMiddleware
 def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI()
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     app.add_middleware(
         CORSMiddleware,
@@ -36,4 +37,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-app.add_middleware(GZipMiddleware, minimum_size=1000)

@@ -18,8 +18,15 @@ __pycache__/
 data/
 *.parquet
 
+**/*.tsbuildinfo
+
+
 # python/node noise
 **/__pycache__/
 **/.pytest_cache/
 **/node_modules/
 **/dist/
+
+**/*.tsbuildinfo
+.vite/
+*.log

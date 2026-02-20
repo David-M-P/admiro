@@ -150,3 +150,59 @@ def filter_frag_vis_ind(ind_list):
     )
 
     return final_df.to_dicts()
+
+
+def filter_summ_stats_ind(phases, mpp):
+
+    df_list = []
+
+    for phase in phases:
+        rel_path = f"summ_stats_ind/phase_state={phase}/mpp={mpp}/0.parquet"
+
+        try:
+            df = _parq_read_parquet(rel_path)
+        except (ResourceNotFoundError, FileNotFoundError) as e:
+            print(
+                f"Missing parquet for phase_state={phase}/mpp={mpp}: {rel_path} ({e})"
+            )
+            continue
+        except Exception as e:
+            print(
+                f"Error reading parquet for phase_state={phase}/mpp={mpp}: {rel_path} ({e})"
+            )
+            continue
+        df = df.select(
+            [
+                "ind",
+                "chrom",
+                "anc",
+                "hap",
+                "len_mea",
+                "len_med",
+                "len_max",
+                "len_min",
+                "nfr",
+                "seq",
+                "phase_state",
+                "mpp",
+                "ind_phase",
+                "lat",
+                "lon",
+                "sex",
+                "reg",
+                "dat",
+                "pop",
+                "ancAFR",
+                "ancAMR",
+                "ancEAS",
+                "ancEUR",
+                "ancMID",
+                "ancOCE",
+                "ancOCE2",
+                "ancSAS",
+            ]
+        )
+        df_list.append(df)
+
+    final_df = pl.concat(df_list)
+    return final_df.to_dict(as_series=False)
