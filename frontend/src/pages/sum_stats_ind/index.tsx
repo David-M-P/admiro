@@ -1,7 +1,6 @@
 import HistogramComponent from "@/pages/sum_stats_ind/components/HistogramComponent";
 import IDDensityComponent from "@/pages/sum_stats_ind/components/IDDensityComponent";
 import MemoizedMapComponent from "@/pages/sum_stats_ind/components/MapComponent";
-import PointComponent from "@/pages/sum_stats_ind/components/PointComponent";
 import SideFilter from "@/pages/sum_stats_ind/components/SideFilter";
 import TDDensityComponent from "@/pages/sum_stats_ind/components/TDDensityComponent";
 import ViolinComponent from "@/pages/sum_stats_ind/components/ViolinComponent";
@@ -454,21 +453,22 @@ export const SummStatInd: React.FC = () => {
                 isSidebarVisible={isSidebarVisible}
               />
             ) : filters.plot === "Points" ? (
-              <PointComponent
-                data={data}
-                var_x={filters.var_2_1}
-                var_y={filters.var_2_2}
-                col={filters.col}
-                isSidebarVisible={isSidebarVisible}
-                mea_med_x={filters.mea_med_x}
-                mea_med_y={filters.mea_med_y}
-                x_axis={filters.x_axis}
-                min_x_axis={filters.min_x_axis}
-                max_x_axis={filters.max_x_axis}
-                y_axis={filters.y_axis}
-                min_y_axis={filters.min_y_axis}
-                max_y_axis={filters.max_y_axis}
-              />
+              //<PointComponent
+              // data={data}
+              // var_x={filters.var_2_1}
+              //var_y={filters.var_2_2}
+              //col={filters.col}
+              //isSidebarVisible={isSidebarVisible}
+              //mea_med_x={filters.mea_med_x}
+              //mea_med_y={filters.mea_med_y}
+              //x_axis={filters.x_axis}
+              //min_x_axis={filters.min_x_axis}
+              //max_x_axis={filters.max_x_axis}
+              //y_axis={filters.y_axis}
+              //min_y_axis={filters.min_y_axis}
+              //max_y_axis={filters.max_y_axis}
+              //>
+              <div>No plot type selected</div>
             ) : filters.plot === "2D Density" ? (
               <TDDensityComponent
                 data={data}

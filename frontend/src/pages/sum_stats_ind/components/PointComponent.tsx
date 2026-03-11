@@ -1,4 +1,4 @@
-import { anc_cmaps, data_cmaps, reg_cmaps } from "@/assets/colormaps";
+/* import { anc_cmaps, data_cmaps, reg_cmaps } from "@/assets/colormaps";
 import { variables } from "@/assets/sharedOptions";
 import { mappingToLong, } from "@/pages/sum_stats_ind/static/ssiStatic";
 import { DataPoint } from "@/types/sum_stat_ind_datapoint";
@@ -1113,3 +1113,4 @@ const fullPoints = (
     );
   }
 };
+ */
