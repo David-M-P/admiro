@@ -9,7 +9,12 @@ import { FragVisFilterState } from "@/types/filter-state";
 import { Box } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+const apiUrl = (path: string) => {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE}${normalized}`;
+};
 const defaultChrms = chrms_all.options;
 const defaultAncs = ancestries_noAll.options;
 const defaultColor = "Ancestry";
@@ -38,7 +43,7 @@ export function FragVisInd() {
   const applyFilters = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/fragvisind-data`, {
+      const response = await fetch(apiUrl("/api/fragvisind-data"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -43,7 +43,12 @@ import {
 
 
 ModuleRegistry.registerModules([AllCommunityModule]);
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+const apiUrl = (path: string) => {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE}${normalized}`;
+};
 
 const collectLeafColumns = (defs: (ColDef | ColGroupDef)[]): ColDef[] => {
   const result: ColDef[] = [];
@@ -111,7 +116,7 @@ export function SummStatInd() {
       };
 
       const tFetch0 = performance.now();
-      const response = await fetch(`${API_BASE}/api/summ-stats-ind-data`, {
+      const response = await fetch(apiUrl("/api/summ-stats-ind-data"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
