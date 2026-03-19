@@ -1,216 +1,111 @@
 import { paths } from "@/paths";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
-import {
-  AppBar,
-  Box,
-  Button,
-  Stack,
-  Toolbar,
-  Typography
-} from "@mui/material";
-import React, { useRef, useState } from "react";
+import TuneIcon from "@mui/icons-material/Tune";
+import { AppBar, Box, Button, IconButton, Toolbar, Typography } from "@mui/material";
+import { useLocation, useNavigate } from "react-router-dom";
 
-export const NavBar: React.FC = () => {
+const navItems = [
+  { label: "Home", path: paths.home },
+  { label: "Individual Summary Stats", path: paths.summary_stats.per_ind },
+  { label: "Fragment Summary Stats", path: paths.summary_stats.per_frag },
+  { label: "Individual Fragment Viewer", path: paths.fragment.vis_per_ind },
+  { label: "Region Fragment Viewer", path: paths.fragment.vis_per_reg },
+  { label: "About", path: paths.others.about },
+];
+
+export function NavBar() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isSidebarVisible, toggleSidebar } = useSidebar();
-  const handleNavigation = (url: string) => {
-    window.location.href = url; // Navigate to the specified URL
-  };
-
-  // State variables for menus
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [menuType, setMenuType] = useState<string>("");
-
-  // Reference to the Popper's Paper component
-  const popperRef = useRef<HTMLDivElement>(null);
-
-  // Handlers for opening menus
-  const handleMenuOpen = (
-    event: React.MouseEvent<HTMLElement>,
-    menu: string
-  ) => {
-    setAnchorEl(event.currentTarget);
-    setMenuType(menu);
-  };
-
-  const handleMenuClose = (event: React.MouseEvent<HTMLElement>) => {
-    if (
-      anchorEl &&
-      (anchorEl.contains(event.relatedTarget as Node) ||
-        (popperRef.current &&
-          popperRef.current.contains(event.relatedTarget as Node)))
-    ) {
-      // The mouse is moving to the anchor or the Popper, don't close
-      return;
-    }
-    setAnchorEl(null);
-    setMenuType("");
-  };
 
   return (
-    <Box
+    <AppBar
+      position="fixed"
       sx={{
-        flexGrow: 1,
-        height: "10dvh",
-        minHeight: "70.85px", // Set Box height explicitly
+        backgroundColor: "primary.main",
+        height: "var(--app-nav-height)",
+        justifyContent: "center",
       }}
     >
-      <AppBar
-        position="fixed"
+      <Toolbar
         sx={{
-          backgroundColor: "primary.main",
-          height: "7dvh", // Explicitly set AppBar height to match Box
-          minHeight: "70.85px",
+          minHeight: "var(--app-nav-height) !important",
+          gap: 2,
+          px: 2,
         }}
       >
-        <Toolbar
+        <Typography
           sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            height: "100%",
+            color: "primary.contrastText",
+            fontWeight: "bold",
+            fontSize: "1.1rem",
+            whiteSpace: "nowrap",
           }}
         >
-          <Typography
-            sx={{
-              color: "primary.contrastText",
-              fontWeight: "bold",
-              fontSize: "1.2rem",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              marginRight: "auto", // Push to the right
-            }}
-          >
-            Generation Interval
-          </Typography>
+          Generation Interval
+        </Typography>
 
-          {/* Middle Stack */}
-          <Stack
-            direction="row"
-            spacing={0}
-            sx={{
-              position: "absolute",
-              flexGrow: 1,
-              left: "50%",
-              transform: "translateX(-50%)", // Center horizontally
-              alignItems: "center",
-              width: "50dvw",
-              height: "100%",
-            }}
-          >
-            <Box
-              sx={{
-                display: 'flex',
-                flexGrow: 1,
-                height: '100%',
-              }}
-            >
-              <Box
-                sx={{
-                  borderLeft: "1px solid white",
-                  height: "100%", // Ensure full height for the separator
-                  alignSelf: "center", // Vertically center the separator
-                }}
-              />
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 1,
+            overflowX: "auto",
+            overflowY: "hidden",
+            "&::-webkit-scrollbar": {
+              display: "none",
+            },
+          }}
+        >
+          {navItems.map((item) => {
+            const isActive =
+              item.path === "/"
+                ? location.pathname === "/"
+                : location.pathname.startsWith(item.path);
+
+            return (
               <Button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                variant={isActive ? "contained" : "text"}
+                size="small"
                 sx={{
-                  flexGrow: 1,
-                  color: 'primary.contrastText',
-                  height: '100%',
-                  lineHeight: 'normal',
-                  textTransform: 'none', fontSize: "1.05rem",
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  whiteSpace: "nowrap",
+                  textTransform: "none",
+                  minWidth: "fit-content",
+                  color: "primary.contrastText",
+                  backgroundColor: isActive ? "rgba(255, 255, 255, 0.22)" : "transparent",
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.18)",
                   },
                 }}
-                onClick={() => handleNavigation(paths.summary_stats.per_ind)}
               >
-                Individual Summary Stats
+                {item.label}
               </Button>
+            );
+          })}
+        </Box>
 
-
-              <Box
-                sx={{
-                  borderLeft: "1px solid white",
-                  height: "100%", // Ensure full height for the separator
-                  alignSelf: "center", // Vertically center the separator
-                }}
-              />
-              <Button
-                sx={{
-                  flexGrow: 1,
-                  color: 'primary.contrastText',
-                  height: '100%',
-                  lineHeight: 'normal',
-                  textTransform: 'none', fontSize: "1.05rem",
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  },
-                }}
-                onClick={() => handleNavigation(paths.summary_stats.per_frag)}
-              >
-                Fragment Summary Stats
-              </Button>
-              <Box
-                sx={{
-                  borderLeft: "1px solid white",
-                  height: "100%", // Ensure full height for the separator
-                  alignSelf: "center", // Vertically center the separator
-                }}
-              />
-              <Button
-                sx={{
-                  flexGrow: 1,
-                  color: 'primary.contrastText',
-                  height: '100%',
-                  lineHeight: 'normal',
-                  textTransform: 'none', fontSize: "1.05rem",
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  },
-                }}
-                onClick={() => handleNavigation(paths.fragment.vis_per_ind)}
-              >
-                Individual Fragment Viewer
-              </Button>
-              <Box
-                sx={{
-                  borderLeft: "1px solid white",
-                  height: "100%", // Ensure full height for the separator
-                  alignSelf: "center", // Vertically center the separator
-                }}
-              />
-              <Button
-                sx={{
-                  flexGrow: 1,
-                  color: 'primary.contrastText',
-                  height: '100%',
-                  lineHeight: 'normal',
-                  textTransform: 'none', fontSize: "1.05rem",
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  },
-                }}
-                onClick={() => handleNavigation(paths.fragment.vis_per_reg)}
-              >
-                Region Fragment Viewer
-              </Button>
-            </Box>
-
-            {/* Separator */}
-            <Box
-              sx={{
-                borderLeft: "1px solid white",
-                height: "100%", // Ensure full height for the separator
-                alignSelf: "center", // Vertically center the separator
-              }}
-            />
-
-          </Stack>
-
-
-        </Toolbar>
-      </AppBar>
-    </Box>
+        <IconButton
+          onClick={toggleSidebar}
+          aria-label="toggle filters sidebar"
+          sx={{
+            color: "primary.contrastText",
+            backgroundColor: isSidebarVisible
+              ? "rgba(255, 255, 255, 0.2)"
+              : "transparent",
+            borderRadius: 1,
+            "&:hover": {
+              backgroundColor: "rgba(255, 255, 255, 0.28)",
+            },
+          }}
+        >
+          <TuneIcon />
+        </IconButton>
+      </Toolbar>
+    </AppBar>
   );
-};
+}

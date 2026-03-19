@@ -1,40 +1,14 @@
-export interface FilterState {
-  phases: string[];
-  var_1: string;
-  data_1: string[];
-  reg_1: string[];
-  mpp_1: number;
-  chrms_1: string[];
-  ancs_1: string[];
-  var_2_1: string;
-  var_2_2: string;
-  col: string[];
-  fac_x: string[];
-  fac_y: string[];
-  mea_med_1: boolean;
-  mea_med_x: boolean;
-  mea_med_y: boolean;
-  plot: string;
-  n_bins: number;
-  x_axis: string;
-  min_x_axis: number;
-  max_x_axis: number;
-  y_axis: string;
-  min_y_axis: number;
-  max_y_axis: number;
-  map_data: boolean;
-  map_data_rad: number;
-  map_reg: boolean;
-  map_reg_rad: number;
-  map_pop: boolean;
-  map_pop_rad: number;
-  map_ind_rad: number;
-  map_lat_jit: number;
-  map_lon_jit: number;
-  tree_lin: string[];
-  bandwidth_divisor: number;
-  thresholds: number;
-}
+import {
+  SUMM_STAT_ANCESTRY_OPTIONS,
+  SUMM_STAT_AXIS_MODES,
+  SUMM_STAT_CHROMOSOME_OPTIONS,
+  SUMM_STAT_PHASE_OPTIONS,
+  SUMM_STAT_REGION_OPTIONS,
+} from "@/pages/sum_stats_ind/config/options";
+import { mapping } from "@/pages/sum_stats_ind/static/mapping";
+import type { SummStatFilterState } from "@/types/filter-state";
+
+export type FilterState = SummStatFilterState;
 export const mppMarks = [
   { value: 0.5, label: "50%" },
   { value: 0.55, label: "" },
@@ -48,7 +22,7 @@ export const mppMarks = [
   { value: 0.95, label: "95%" },
 ];
 
-export const optionsAxis = ["Free Axis", "Shared Axis", "Define Range"]
+export const optionsAxis = [...SUMM_STAT_AXIS_MODES];
 export const mapJitMarks = [
   { value: 0, label: "0" },
   { value: 1, label: "" },
@@ -81,86 +55,15 @@ export const datasets = {
     "AYTA",
     "OFAR",
   ],
-  options: [
-    "Unphased",
-    "Phased",
-  ],
+  options: [...SUMM_STAT_PHASE_OPTIONS],
 };
 
-export const mappingToShort = {
-  Autosome: "A",
-  X: "X",
-  "X Prime": "Xprime",
-  All: "All",
-  Ambiguous: "Ambiguous",
-  Denisova: "Denisova",
-  Neanderthal: "Neanderthal",
-  Altai: "Altai",
-  Vindija: "Vindija",
-  Chagyrskaya: "Chagyrskaya",
-  AmbigNean: "AmbigNean",
-  "Non DAVC": "nonDAVC",
-  Individual: "ind",
-  Sex: "sex",
-  Population: "pop",
-  Region: "reg",
-  Dataset: "dat",
-  "Original dataset": "oda",
-  Time: "tim",
-  Latitude: "lat",
-  Longitude: "lon",
-  Chromosome: "chrom",
-  Ancestry: "anc",
-  "Mean Length (bp)": "len_mea",
-  "Median Length (bp)": "len_med",
-  "Max Length (bp)": "len_max",
-  "Min Length (bp)": "len_min",
-  "N Fragments": "nfr",
-  "Sequence (bp)": "seq",
-  "Anc Africa": "ancAFR",
-  "Anc America": "ancAMR",
-  "Anc East Asia": "ancEAS",
-  "Anc Europe": "ancEUR",
-  "Anc Oceania": "ancOCE",
-  "Anc South Asia": "ancSAS",
-  DATA: "DATA",
-  PDAT: "PDAT",
-  GNOM: "GNOM",
-  PGNO: "PGNO",
-  GENI: "GENI",
-  PGEN: "PGEN",
-  "1KGP": "1KGP",
-  HGDP: "HGDP",
-  SGDP: "SGDP",
-  VANU: "VANU",
-  IGDP: "IGDP",
-  AYTA: "AYTA",
-  OFAR: "OFAR",
-  Europe: "EUR",
-  "Middle East": "MID",
-  "South Asia": "SAS",
-  Africa: "AFR",
-  "East Asia": "EAS",
-  America: "AMR",
-  Oceania: "OCE",
-  "Central Asia": "CAS",
-  Global: "GLOB",
-  Joined: "joined",
-  Frequency: "freq",
-  Shared: "shared",
-  Private: "private",
-  Haploidy: "hap",
-  Start: "start",
-  End: "end",
-  Length: "length",
-  SNPs: "snps",
-  "Mean Post. Prob.": "mean_prob",
-  "Admix. Pop. Variants": "arc",
-  "Phased": "PDAT",
-  "Diploid": "DATA",
-}
-
 export const mappingToLong = {
+  ...mapping.toLong,
+  ...mapping.values.reg.toLong,
+  ...mapping.values.chrom.toLong,
+  ...mapping.values.anc.toLong,
+  ...mapping.values.phase_state.toLong,
   EUR: "Europe",
   MID: "Middle East",
   SAS: "South Asia",
@@ -186,51 +89,7 @@ export const mappingToLong = {
   cha: "Chagyrskaya",
   AmbigNean: "AmbigNean",
   nonDAVC: "Non DAVC",
-}
-
-
-
-export const optionsContinuousShort = ["tim",
-  "lat",
-  "lon",
-  "len_mea",
-  "len_med",
-  "len_max",
-  "len_min",
-  "nfr",
-  "seq",
-  "ancAFR",
-  "ancAMR",
-  "ancEAS",
-  "ancEUR",
-  "ancOCE",
-  "ancSAS",]
-
-
-export const optionsChromosome = ["Autosome", "X", "X Prime"]
-
-export const optionsAncestry = [
-  "All",
-  "Ambiguous",
-  "Denisova",
-  "Neanderthal",
-  "Altai",
-  "Vindija",
-  "Chagyrskaya",
-  "AmbigNean",
-  "Non DAVC",
-]
-
-export const optionsRegion = [
-  "Europe",
-  "Middle East",
-  "South Asia",
-  "Africa",
-  "East Asia",
-  "America",
-  "Oceania",
-  "Central Asia",
-]
+};
 
 export const binMarks = [
   { value: 0, label: "0" },
@@ -257,11 +116,8 @@ export const tdThresholdDivisorMarks = [
 ];
 
 export const phases = {
-  options: [
-    "Unphased",
-    "Phased",
-  ]
-}
+  options: [...SUMM_STAT_PHASE_OPTIONS],
+};
 export const variables = {
   allOptions: [
     "Chromosome",
@@ -311,39 +167,33 @@ export const variables = {
     "Anc Oceania 2",
     "Anc South Asia",
     "Anc Middle East",
-  ]
-}
+  ],
+  continuousOptions: [
+    "Mean Length (bp)",
+    "Median Length (bp)",
+    "Max Length (bp)",
+    "Min Length (bp)",
+    "N Fragments",
+    "Sequence (bp)",
+    "Anc Africa",
+    "Anc America",
+    "Anc East Asia",
+    "Anc Europe",
+    "Anc Oceania",
+    "Anc Oceania 2",
+    "Anc South Asia",
+    "Anc Middle East",
+  ],
+};
 
 export const ancestries = {
-  options: [
-    "All",
-    "Ambiguous",
-    "Denisova",
-    "Neanderthal",
-    "Altai",
-    "Vindija",
-    "Chagyrskaya",
-    "AmbigNean",
-    "Non DAVC",
-  ]
-}
+  options: [...SUMM_STAT_ANCESTRY_OPTIONS],
+};
 
 export const chromosomes = {
-  options: [
-    "Autosomes",
-    "X Chromosome",
-  ]
-}
+  options: [...SUMM_STAT_CHROMOSOME_OPTIONS],
+};
 
 export const regions = {
-  options: [
-    "Europe",
-    "Middle East",
-    "South Asia",
-    "Africa",
-    "East Asia",
-    "America",
-    "Oceania",
-    "Central Asia"
-  ]
-}
+  options: [...SUMM_STAT_REGION_OPTIONS],
+};

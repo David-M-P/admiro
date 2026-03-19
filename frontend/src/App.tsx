@@ -3,8 +3,6 @@ import { ThemeProvider } from "@mui/material/styles";
 import { BrowserRouter } from "react-router-dom";
 import { AppRouter } from "./router";
 
-import "@/responsive.css";
-
 import "@/layout/layout.css";
 
 

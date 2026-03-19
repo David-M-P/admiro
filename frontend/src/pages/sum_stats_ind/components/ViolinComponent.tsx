@@ -1,9 +1,13 @@
-import { anc_cmaps, data_cmaps, reg_cmaps } from "@/assets/colormaps";
+import { buildColorScale } from "@/pages/sum_stats_ind/domain/colorScale";
+import { toLongCol, toShortCol } from "@/pages/sum_stats_ind/domain/columns";
+import { asNum, keyFromCols } from "@/pages/sum_stats_ind/domain/data";
+import { buildFacetGroups } from "@/pages/sum_stats_ind/domain/faceting";
+import { applyCommonDataFilters } from "@/pages/sum_stats_ind/domain/filtering";
+import { usePlotContainerSize } from "@/pages/sum_stats_ind/hooks/usePlotContainerSize";
 import {
   kernelDensityEstimator,
   kernelEpanechnikov,
 } from "@/pages/sum_stats_ind/static/densityUtils";
-import { mapping } from "@/pages/sum_stats_ind/static/mapping";
 import { DataPoint } from "@/types/sum_stat_ind_datapoint";
 import * as d3 from "d3";
 import React, { useCallback, useEffect, useRef } from "react";
@@ -27,58 +31,6 @@ type ViolinPlotProps = {
 };
 
 
-// -------------------- Helpers --------------------
-const toShortCol = (s: string) => mapping.toShort[s] ?? s;
-const toLongCol = (k: string) => mapping.toLong[k] ?? k;
-const asNum = (x: unknown) => (x === null || x === undefined ? NaN : +x);
-
-
-const keyFromCols =
-  (colsShort: string[]) =>
-    (d: DataPoint): string => {
-      if (colsShort.length === 0) return "__all__";
-      if (colsShort.length === 1) {
-        const v = (d as any)[colsShort[0]];
-        return v === null || v === undefined ? "" : String(v);
-      }
-      return colsShort
-        .map((c) => {
-          const v = (d as any)[c];
-          return v === null || v === undefined ? "" : String(v);
-        })
-        .join("_");
-    };
-
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-const makeNormMap = (m: Record<string, string>) => {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(m)) out[norm(k)] = v;
-  return out;
-};
-
-const valueShortMaps = {
-  anc: makeNormMap(mapping.values.anc.toShort),
-  reg: makeNormMap(mapping.values.reg.toShort),
-  chrom: makeNormMap(mapping.values.chrom.toShort),
-} as const;
-
-type ValueField = keyof typeof valueShortMaps;
-
-const toShortValue = (field: ValueField, v: string) => {
-  return valueShortMaps[field][norm(v)] ?? v;
-};
-
-function toLongValue(colKeyShort: string, v: unknown): string {
-  if (v === null || v === undefined) return "NA";
-  const s = String(v);
-  const valueMapToLong =
-    (mapping.values as any)[colKeyShort]?.toLong as
-    | Record<string, string>
-    | undefined;
-  return valueMapToLong?.[s] ?? s;
-}
-
-// -------------------- Color scale --------------------
 const createColorScale = (
   data: DataPoint[],
   col: string[],
@@ -89,78 +41,13 @@ const createColorScale = (
   discreteOrContinuous: string;
   globalColorOrder: string[];
 } => {
-  let getColor: (d: DataPoint) => string;
-  let legendData: { label: string; color: string; extent?: [number, number] }[];
-  let discreteOrContinuous: string;
-  let globalColorOrder: string[] = [];
-
-  const var1Short = toShortCol(var_1);
-  const colShort = col.map(toShortCol);
-  const colorKey = keyFromCols(colShort);
-
-  if (col.length === 1 && col[0] === "") {
-    const defaultColor = "steelblue";
-    getColor = () => defaultColor;
-    legendData = [{ label: "Default Color", color: defaultColor }];
-    discreteOrContinuous = "default";
-    globalColorOrder = [defaultColor];
-  } else {
-    const groupedData = Array.from(
-      d3.group(data, (d) => colorKey(d)),
-      ([key, values]) => ({
-        key,
-        values,
-        mean: d3.mean(values, (v) => (v as any)[var1Short] as number)!,
-      })
-    );
-
-    const sortedGroups = groupedData.sort((a, b) =>
-      d3.ascending(a.mean, b.mean)
-    );
-
-    globalColorOrder = sortedGroups.map((group) => group.key);
-
-
-    if (colShort.length === 1 && ["reg", "dat", "anc"].includes(colShort[0])) {
-      let chosenMap: Record<string, string> = {};
-      if (colShort[0] === "reg") chosenMap = reg_cmaps;
-      else if (colShort[0] === "dat") chosenMap = data_cmaps;
-      else if (colShort[0] === "anc") chosenMap = anc_cmaps;
-
-      getColor = (d) => {
-        const val = colorKey(d);
-        if (!val) return "steelblue";
-        return chosenMap[val] || "steelblue";
-      };
-
-      legendData = globalColorOrder.map((val) => ({
-        // if val is short-coded value, try mapping.values[col0Short].toLong
-        label: toLongValue(colShort[0], val),
-        color: chosenMap[val] || "steelblue",
-      }));
-
-      discreteOrContinuous = "discrete";
-    } else {
-      const colorScale = d3
-        .scaleOrdinal(d3.schemeCategory10)
-        .domain(globalColorOrder);
-
-      getColor = (d) => {
-        const value = colorKey(d);
-        return value !== null && value !== undefined && value !== ""
-          ? colorScale(String(value))
-          : "steelblue";
-      };
-
-      legendData = globalColorOrder.map((value) => ({
-        label: String(value),
-        color: colorScale(value),
-      }));
-
-      discreteOrContinuous = "discrete";
-    }
-  }
-  return { getColor, legendData, discreteOrContinuous, globalColorOrder };
+  return buildColorScale({
+    rows: data,
+    colorColumns: col,
+    sortMetricColumn: var_1,
+    emptyGroupKey: "__all__",
+    defaultOrderValue: "__default__",
+  });
 };
 
 // -------------------- drawViolin --------------------
@@ -215,7 +102,7 @@ const drawViolin = (
     .attr("stroke", "black");
 
   // extent on short var key
-  const v = (d: DataPoint) => asNum((d as any)[var1Short]);
+  const v = (d: DataPoint) => asNum(d[var1Short]);
   const extent = d3.extent(data, v);
 
   if (extent[0] == null || extent[1] == null || !Number.isFinite(extent[0]) || !Number.isFinite(extent[1])) {
@@ -304,7 +191,7 @@ const drawViolin = (
          <strong>Haplotype:</strong> ${d.hap}<br/>`
       );
     })
-    .on("mousemove", function (event, d) {
+    .on("mousemove", function (event) {
       const [mouseX, mouseY] = d3.pointer(event, containerSel.node()); // Ensure the mouse position is relative to the container
       tooltip
         .style("left", `${mouseX + 10}px`)
@@ -480,7 +367,7 @@ const drawViolin = (
 };
 
 // -------------------- Component --------------------
-const ViolinComponent: React.FC<ViolinPlotProps> = ({
+const ViolinComponent = ({
   data,
   phases,
   tree_lin,
@@ -496,7 +383,7 @@ const ViolinComponent: React.FC<ViolinPlotProps> = ({
   min_y_axis,
   max_y_axis,
   isSidebarVisible,
-}) => {
+}: ViolinPlotProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
@@ -517,7 +404,6 @@ const ViolinComponent: React.FC<ViolinPlotProps> = ({
         y_axis,
         min_y_axis,
         max_y_axis,
-        isSidebarVisible,
       );
     }
   }, [
@@ -559,7 +445,6 @@ const ViolinComponent: React.FC<ViolinPlotProps> = ({
         y_axis,
         min_y_axis,
         max_y_axis,
-        isSidebarVisible,
       );
     }
   }, [
@@ -580,15 +465,11 @@ const ViolinComponent: React.FC<ViolinPlotProps> = ({
     isSidebarVisible,
   ]);
 
-  useEffect(() => {
-    window.addEventListener("resize", handleResize);
-    handleResize();
-    return () => window.removeEventListener("resize", handleResize);
-  }, [data, handleResize]);
-
-  useEffect(() => {
-    handleResize();
-  }, [isSidebarVisible, handleResize]);
+  usePlotContainerSize({
+    containerRef,
+    onResize: handleResize,
+    deps: [isSidebarVisible],
+  });
 
   return (
     <div
@@ -620,7 +501,6 @@ const fullViolin = (
   y_axis: string,
   min_y_axis: number,
   max_y_axis: number,
-  isSidebarVisible: boolean,
 ) => {
 
   const containerSel = d3.select(svgElement.parentElement as HTMLElement);
@@ -629,55 +509,15 @@ const fullViolin = (
 
   const tooltip = containerSel.append("div").attr("class", "tooltip");
   const meaMedTooltip = containerSel.append("div").attr("class", "tooltip");
-
-  const ancFields = ["ancAMR", "ancEAS", "ancSAS", "ancAFR", "ancEUR", "ancOCE"] as const;
-  function filterOutNullAncestryFields(data: DataPoint[], var_1: string, col: string[]) {
-    const var1Short = toShortCol(var_1);
-    const colShort = col.map(toShortCol);
-
-    const varIsAnc = ancFields.includes(var1Short as any);
-    const colHasAnc = colShort.some((c) => ancFields.includes(c as any));
-
-    if (!varIsAnc && !colHasAnc) return data;
-
-    return data.filter((d) => {
-      if (varIsAnc && (d as any)[var1Short] === null) return false;
-      if (colHasAnc) {
-        for (const c of colShort) {
-          if (ancFields.includes(c as any) && (d as any)[c] === null) return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  // --- Build filter sets (short values) ---
-  const excludeIndPhase = new Set(tree_lin ?? []);
-  const ancAllowed = new Set((ancs ?? []).map((v) => toShortValue("anc", v)));
-  const regAllowed = new Set((regs ?? []).map((v) => toShortValue("reg", v)));
-  const chromAllowed = new Set((chroms ?? []).map((v) => toShortValue("chrom", v)));
-
-  // --- Apply filters ---
-  let filteredData = data.filter((d) => {
-    if (excludeIndPhase.size > 0 && excludeIndPhase.has(d.ind_phase)) return false;
-    if (ancAllowed.size > 0 && !ancAllowed.has(d.anc)) return false;
-    if (regAllowed.size > 0 && !regAllowed.has(d.reg)) return false;
-
-    const chromPass =
-      chromAllowed.has(d.chrom) ||
-      (chromAllowed.has("A") && (d.chrom === "A" || /^\d+$/.test(d.chrom)));
-    if (!chromPass) return false;
-
-    return true;
+  data = applyCommonDataFilters({
+    rows: data,
+    treeLin: tree_lin,
+    ancestries: ancs,
+    regions: regs,
+    chromosomes: chroms,
+    ancestryRequiredColumns: [var_1, ...col],
+    finiteColumns: [var_1],
   });
-
-
-
-  filteredData = filterOutNullAncestryFields(filteredData, var_1, col);
-  data = filteredData;
-
-  const var1Short = toShortCol(var_1);
-  data = data.filter((d) => Number.isFinite(asNum((d as any)[var1Short])));
 
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
@@ -688,34 +528,6 @@ const fullViolin = (
 
   const { getColor, legendData, discreteOrContinuous, globalColorOrder } =
     createColorScale(data, col, var_1);
-
-  // --- Facet grouping: combinations of filters.fac_x ---
-  type FacetGroup = { key: string; title: string; points: DataPoint[] };
-
-  function buildFacetGroups(data: DataPoint[], facXLong: string[]): FacetGroup[] {
-    const facColsShort = (facXLong ?? []).map(toShortCol).filter((k) => k.length > 0);
-
-    if (facColsShort.length === 0) {
-      return [{ key: "__all__", title: "", points: data }];
-    }
-
-    const groups = new Map<string, { title: string; points: DataPoint[] }>();
-
-    for (const d of data) {
-      const key = facColsShort.map((k) => `${k}=${String((d as any)[k] ?? "NA")}`).join("|");
-      const title = facColsShort
-        .map((k) => `${toLongCol(k)}: ${toLongValue(k, (d as any)[k])}`)
-        .join("\n");
-
-      const existing = groups.get(key);
-      if (!existing) groups.set(key, { title, points: [d] });
-      else existing.points.push(d);
-    }
-
-    return Array.from(groups.entries())
-      .map(([key, v]) => ({ key, title: v.title, points: v.points }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }
 
   const facets = buildFacetGroups(data, fac_x);
   const facetingRequiredX = facets.length > 1;
@@ -835,7 +647,7 @@ const fullViolin = (
       if (y_axis === "Define Range") {
         yScale.domain([min_y_axis, max_y_axis]).range([plotHeight, 0]);
       } else if (y_axis === "Shared Axis") {
-        const v = (d: DataPoint) => asNum((d as any)[var1Short]);
+        const v = (d: DataPoint) => asNum(d[var1Short]);
 
         const minVal = d3.min(data, v);
         const maxVal = d3.max(data, v);
@@ -892,7 +704,7 @@ const fullViolin = (
     if (y_axis === "Define Range") {
       yScale.domain([min_y_axis, max_y_axis]).range([plotHeight, 0]);
     } else if (y_axis === "Shared Axis") {
-      const v = (d: DataPoint) => asNum((d as any)[var1Short]);
+      const v = (d: DataPoint) => asNum(d[var1Short]);
 
       const minVal = d3.min(data, v);
       const maxVal = d3.max(data, v);

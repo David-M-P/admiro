@@ -8,7 +8,7 @@ import React, { useEffect, useRef } from "react";
 
 
 type ChromosomeProps = {
-  data: any[];
+  data: DataPoint[];
   isSidebarVisible: boolean;
   lin: string[];
   chrms: string[];
@@ -81,12 +81,6 @@ const createColorScale = (
           .map(String)
       ),
     ];
-
-    const hueFromString = (s: string) => {
-      let h = 0;
-      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-      return h % 360;
-    };
 
     const hash32 = (s: string) => {
       let h = 2166136261; // FNV-1a
@@ -264,7 +258,7 @@ const plotChromosomes = (
 
 
 
-  function handleMouseOver(event: any, d: DataPoint) {
+  function handleMouseOver(event: MouseEvent, d: DataPoint) {
     tooltip.transition().duration(200).style("opacity", 0.9);
 
     const [mouseX, mouseY] = d3.pointer(event, container);
@@ -318,12 +312,12 @@ const plotChromosomes = (
       .style("top", mouseY - 28 + "px");
   }
 
-  function handleMouseMove(event: any, d: DataPoint) {
+  function handleMouseMove(event: MouseEvent, _d: DataPoint) {
     const [mouseX, mouseY] = d3.pointer(event, container);
     tooltip.style("left", mouseX + 10 + "px").style("top", mouseY - 28 + "px");
   }
 
-  function handleMouseOut(event: any, d: DataPoint) {
+  function handleMouseOut(_event: MouseEvent, _d: DataPoint) {
     tooltip.transition().duration(500).style("opacity", 0);
   }
 
@@ -359,10 +353,6 @@ const plotChromosomes = (
 
   const { getColor, legendData, discreteOrContinuous } = createColorScale(data, colorKey);
 
-  const maxChromLength = Math.max(
-    ...orderedChrms.map((chrom) => chrlen[chrom] || min_length)
-  );
-
   const xScale = d3
     .scaleLinear()
     .domain([chrms_limits[0] * 1000, chrms_limits[1] * 1000])
@@ -378,31 +368,6 @@ const plotChromosomes = (
 
   // Adjust loop and partitionHeight
   const partitionHeight = chrHeight / uniqueLinHap.length;
-
-  let colorScaleDiscrete: d3.ScaleOrdinal<string, string> | null = null;
-  let colorScaleContinous: ((value: number) => string) | null = null;
-
-  if (color === "Ancestry") {
-    colorScaleDiscrete = d3
-      .scaleOrdinal<string>(d3.schemeCategory10)
-      .domain(ancs);
-  } else if (color === "Individual") {
-    colorScaleDiscrete = d3
-      .scaleOrdinal<string>(d3.schemeCategory10)
-      .domain(lin);
-  } else if (color === "Mean Posterior Probability") {
-    // Scale maps from 0.5 to 1, and the result of the scale will be a number between 0 and 1.
-    const mppScale = d3
-      .scaleLinear<number>()
-      .domain([0.5, 1]) // Input domain
-      .range([0, 1]); // Range for the interpolator
-
-    // The color scale uses `interpolateBlues` to map the number to a color
-    colorScaleContinous = (value: number) =>
-      d3.interpolateBlues(mppScale(value));
-  }
-
-
 
   // Draw chromosomes
   orderedChrms.forEach((chrom, index) => {

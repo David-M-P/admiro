@@ -6,14 +6,13 @@ import { HomePage } from "@/pages/home";
 import { SummStatFrag } from "@/pages/sum_stats_frag";
 import { SummStatInd } from "@/pages/sum_stats_ind";
 import { paths } from "@/paths";
-import React from "react";
 import { Route, Routes } from "react-router-dom";
 
-export const AppRouter: React.FC<NonNullable<unknown>> = () => {
+export function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route index element={<HomePage />} />
         <Route path={paths.others.about} element={<AboutPage />} />
         <Route path={paths.summary_stats.per_ind} element={<SummStatInd />} />
         <Route path={paths.summary_stats.per_frag} element={<SummStatFrag />} />
@@ -22,4 +21,4 @@ export const AppRouter: React.FC<NonNullable<unknown>> = () => {
       </Route>
     </Routes>
   );
-};
+}

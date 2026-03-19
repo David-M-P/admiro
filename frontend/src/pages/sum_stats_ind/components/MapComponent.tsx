@@ -1,6 +1,7 @@
-import { anc_cmaps, data_cmaps, reg_cmaps } from "@/assets/colormaps";
-import { mapping } from "@/pages/sum_stats_ind/static/mapping";
-import { mappingToLong, variables } from "@/pages/sum_stats_ind/static/ssiStatic";
+import { data_cmaps, reg_cmaps } from "@/assets/colormaps";
+import { buildColorScale } from "@/pages/sum_stats_ind/domain/colorScale";
+import { applyCommonDataFilters } from "@/pages/sum_stats_ind/domain/filtering";
+import { mappingToLong } from "@/pages/sum_stats_ind/static/ssiStatic";
 import { DataPoint } from "@/types/sum_stat_ind_datapoint";
 import * as d3 from "d3";
 import L from "leaflet";
@@ -33,11 +34,6 @@ interface MapComponentProps {
 
 
 // -------------------- Helpers --------------------
-const toShortCol = (s: string) => mapping.toShort[s] ?? s;
-const toLongCol = (k: string) => mapping.toLong[k] ?? k;
-const asNum = (x: unknown) => (x === null || x === undefined ? NaN : +x);
-
-
 const xmur3 = (str: string) => {
   let h = 1779033703 ^ str.length;
   for (let i = 0; i < str.length; i++) {
@@ -82,53 +78,6 @@ const applyDeterministicJitter = (
   };
 };
 
-const keyFromCols =
-  (colsShort: string[]) =>
-    (d: DataPoint): string => {
-      if (colsShort.length === 0) return "__all__";
-      if (colsShort.length === 1) {
-        const v = (d as any)[colsShort[0]];
-        return v === null || v === undefined ? "" : String(v);
-      }
-      return colsShort
-        .map((c) => {
-          const v = (d as any)[c];
-          return v === null || v === undefined ? "" : String(v);
-        })
-        .join("_");
-    };
-
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-const makeNormMap = (m: Record<string, string>) => {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(m)) out[norm(k)] = v;
-  return out;
-};
-
-const valueShortMaps = {
-  anc: makeNormMap(mapping.values.anc.toShort),
-  reg: makeNormMap(mapping.values.reg.toShort),
-  chrom: makeNormMap(mapping.values.chrom.toShort),
-} as const;
-
-type ValueField = keyof typeof valueShortMaps;
-
-const toShortValue = (field: ValueField, v: string) => {
-  return valueShortMaps[field][norm(v)] ?? v;
-};
-
-function toLongValue(colKeyShort: string, v: unknown): string {
-  if (v === null || v === undefined) return "NA";
-  const s = String(v);
-  const valueMapToLong =
-    (mapping.values as any)[colKeyShort]?.toLong as
-    | Record<string, string>
-    | undefined;
-  return valueMapToLong?.[s] ?? s;
-}
-
-
-// -------------------- Color scale --------------------
 const createColorScale = (
   data: DataPoint[],
   col: string,
@@ -139,133 +88,19 @@ const createColorScale = (
   discreteOrContinuous: string;
   globalColorOrder: string[];
 } => {
-  let getColor: (d: DataPoint) => string;
-  let legendData: { label: string; color: string; extent?: [number, number] }[];
-  let discreteOrContinuous: string;
-  let globalColorOrder: string[] = [];
-
-  const var1Short = toShortCol(var_1);
-  const continuousShortSet = new Set(variables.continousOptions.map(toShortCol));
-  const discreteShortSet = new Set(variables.discreteOptions.map(toShortCol));
-
-  const colShort = col ? [toShortCol(col)] : [];
-  const colorKey = keyFromCols(colShort);
-  let continuousColorFieldShort: string | null = null;
-
-
-  if (col === "") {
-    const defaultColor = "steelblue";
-    getColor = () => defaultColor;
-    legendData = [{ label: "Default Color", color: defaultColor }];
-    discreteOrContinuous = "default";
-    globalColorOrder = ["__all__"];
-  } else {
-    const groupedData = Array.from(
-      d3.group(data, (d) => colorKey(d)),
-      ([key, values]) => ({
-        key,
-        values,
-        mean: d3.mean(values, (v) => (v as any)[var1Short] as number)!,
-      })
-    );
-
-    const sortedGroups = groupedData.sort((a, b) =>
-      d3.ascending(a.mean, b.mean)
-    );
-
-    globalColorOrder = sortedGroups.map((group) => group.key);
-
-    if (continuousShortSet.has(colShort[0])) {
-      const key = colShort[0];
-      continuousColorFieldShort = key;
-
-      const values = data
-        .map((d) => Number((d as any)[key]))
-        .filter(Number.isFinite);
-
-      if (values.length === 0) {
-        getColor = () => "steelblue";
-        legendData = [{ label: "No valid data", color: "steelblue" }];
-        discreteOrContinuous = "continuous";
-        globalColorOrder = [];
-      } else {
-        const [rawMin, rawMax] = d3.extent(values) as [number, number];
-        let min = Math.floor(rawMin);
-        let max = Math.ceil(rawMax);
-        if (min === max) { min -= 1; max += 1; }
-
-        const extent: [number, number] = [min, max];
-        const colorScale = d3.scaleSequential(d3.interpolateViridis).domain(extent);
-
-        getColor = (d) => {
-          const v = Number((d as any)[key]);
-          return Number.isFinite(v) ? colorScale(v) : "steelblue";
-        };
-
-        legendData = [
-          { label: `Min: ${min}`, color: colorScale(min), extent },
-          { label: `Max: ${max}`, color: colorScale(max), extent },
-        ];
-
-        discreteOrContinuous = "continuous";
-        globalColorOrder = [];
-      }
-
-      return {
-        getColor,
-        legendData,
-        discreteOrContinuous,
-        globalColorOrder,
-      };
-    }
-
-    if (["reg", "dat", "anc"].includes(colShort[0])) {
-      let chosenMap: Record<string, string> = {};
-      if (colShort[0] === "reg") chosenMap = reg_cmaps;
-      else if (colShort[0] === "dat") chosenMap = data_cmaps;
-      else if (colShort[0] === "anc") chosenMap = anc_cmaps;
-
-      getColor = (d) => {
-        const val = colorKey(d);
-        if (!val) return "steelblue";
-        return chosenMap[val] || "steelblue";
-      };
-
-
-      legendData = globalColorOrder.map((val) => ({
-        // if val is short-coded value, try mapping.values[col0Short].toLong
-        label: toLongValue(colShort[0], val),
-        color: chosenMap[val] || "steelblue",
-      }));
-
-      discreteOrContinuous = "discrete";
-    } else {
-      const colorScale = d3
-        .scaleOrdinal<string, string>(d3.schemeCategory10)
-        .domain(globalColorOrder);
-
-      getColor = (d) => {
-        const value = colorKey(d);
-        return value !== null && value !== undefined && value !== ""
-          ? colorScale(String(value))
-          : "steelblue";
-      };
-
-
-      legendData = globalColorOrder.map((value) => ({
-        label: String(value),
-        color: colorScale(value),
-      }));
-
-      discreteOrContinuous = "discrete";
-    }
-  }
-  return { getColor, legendData, discreteOrContinuous, globalColorOrder };
+  return buildColorScale({
+    rows: data,
+    colorColumns: col ? [col] : [],
+    sortMetricColumn: var_1,
+    allowContinuous: true,
+    emptyGroupKey: "__all__",
+    defaultOrderValue: "__all__",
+  });
 };
 
 
 
-const MapComponent: React.FC<MapComponentProps> = ({
+const MapComponent = ({
   data,
   tree_lin,
   var_1,
@@ -281,52 +116,18 @@ const MapComponent: React.FC<MapComponentProps> = ({
   map_ind_rad,
   map_lat_jit,
   map_lon_jit,
-}) => {
+}: MapComponentProps) => {
 
   const tooltipContainerRef = useRef<HTMLDivElement>(null);
   const tooltipSelRef = useRef<d3.Selection<HTMLDivElement, unknown, null, undefined> | null>(null);
-  const ancFields = ["ancAMR", "ancEAS", "ancSAS", "ancAFR", "ancEUR", "ancOCE"] as const;
-  function filterOutNullAncestryFields(data: DataPoint[], var_1: string, col: string) {
-    const var1Short = toShortCol(var_1);
-    const colShort = col ? [toShortCol(col)] : [];
-
-    const varIsAnc = ancFields.includes(var1Short as any);
-    const colHasAnc = colShort.some((c) => ancFields.includes(c as any));
-
-    if (!varIsAnc && !colHasAnc) return data;
-
-    return data.filter((d) => {
-      if (varIsAnc && (d as any)[var1Short] === null) return false;
-      if (colHasAnc) {
-        for (const c of colShort) {
-          if (ancFields.includes(c as any) && (d as any)[c] === null) return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  const excludeIndPhase = new Set(tree_lin ?? []);
-  const ancAllowed = new Set((ancs ?? []).map((v) => toShortValue("anc", v)));
-  const regAllowed = new Set((regs ?? []).map((v) => toShortValue("reg", v)));
-  const chromAllowed = new Set((chroms ?? []).map((v) => toShortValue("chrom", v)));
-
-  // --- Apply filters ---
-  let filteredData = data.filter((d) => {
-    if (excludeIndPhase.size > 0 && excludeIndPhase.has(d.ind_phase)) return false;
-    if (ancAllowed.size > 0 && !ancAllowed.has(d.anc)) return false;
-    if (regAllowed.size > 0 && !regAllowed.has(d.reg)) return false;
-
-    const chromPass =
-      chromAllowed.has(d.chrom) ||
-      (chromAllowed.has("A") && (d.chrom === "A" || /^\d+$/.test(d.chrom)));
-    if (!chromPass) return false;
-
-    return true;
+  data = applyCommonDataFilters({
+    rows: data,
+    treeLin: tree_lin,
+    ancestries: ancs,
+    regions: regs,
+    chromosomes: chroms,
+    ancestryRequiredColumns: [var_1],
   });
-
-  filteredData = filterOutNullAncestryFields(filteredData, var_1, var_1);
-  data = filteredData;
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<L.Map>();
@@ -342,25 +143,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const popColorScale = d3
     .scaleOrdinal(d3.schemeSet2)
     .domain([...new Set(data.map((d) => d.pop))]);
-
-
-  const generateGaussianNoise = (mean: number, stdDev: number): number => {
-    let u = 0, v = 0;
-    while (u === 0) u = Math.random();
-    while (v === 0) v = Math.random();
-    return stdDev * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) + mean;
-  };
-
-  const applyJitter = (
-    lat: number,
-    lon: number,
-    latJit: number,
-    lonJit: number
-  ): { jitterLat: number; jitterLon: number } => ({
-    jitterLat: lat + generateGaussianNoise(0, latJit),
-    jitterLon: lon + generateGaussianNoise(0, lonJit),
-  });
-
   // now memoize:
   const jitteredData = React.useMemo<JitteredDataPoint[]>(() => {
     return data.map((d) => {
@@ -612,7 +394,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
     // Create the legend content
     const legendContainer = d3.select("#legend");
     legendContainer.selectAll("*").remove(); // Clear previous legend content
-    const var1Short = toShortCol(var_1);
     // Create the main legend based on the "col" argument
     function createMainLegend() {
       const mainLegend = legendContainer

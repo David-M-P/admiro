@@ -28,4 +28,5 @@ export interface DataPoint {
   ancOCE: number | null;
   ancOCE2: number | null;
   ancMID: number | null;
+  [key: string]: string | number | null | undefined;
 }

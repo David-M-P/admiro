@@ -3,6 +3,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "2d_density",
     <svg
+      key="2d_density"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -27,6 +28,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "violin",
     <svg
+      key="violin"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -50,6 +52,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "bar",
     <svg
+      key="bar"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -90,6 +93,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "histogram",
     <svg
+      key="histogram"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -130,6 +134,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "map",
     <svg
+      key="map"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -160,6 +165,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "points",
     <svg
+      key="points"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -186,6 +192,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "density",
     <svg
+      key="density"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"
@@ -208,6 +215,7 @@ export const icons = new Map<string, JSX.Element>([
   [
     "quantiles",
     <svg
+      key="quantiles"
       fill="currentColor"
       viewBox="0 0 32 32"
       xmlns="http://www.w3.org/2000/svg"

@@ -1,9 +1,15 @@
 import { icons } from "@/assets/icons";
 import { checkboxBoxStyles } from "@/assets/styles";
-import { ancestries, bandwidthDivisorMarks, binMarks, chromosomes, FilterState, mapJitMarks, mappingToShort, mppMarks, optionsAxis, phases, regions, tdBandwidthDivisorMarks, tdThresholdDivisorMarks, variables } from "@/pages/sum_stats_ind/static/ssiStatic";
-import "@/pages/sum_stats_ind/style/SideFilter.css";
+import { DEFAULTS_BY_PLOT } from "@/pages/sum_stats_ind/config/defaultFilters";
+import {
+  SUMM_STAT_PLOT_OPTIONS_DOUBLE,
+  SUMM_STAT_PLOT_OPTIONS_SINGLE,
+  SummStatPlotType,
+} from "@/pages/sum_stats_ind/config/options";
+import { ancestries, bandwidthDivisorMarks, binMarks, chromosomes, mapJitMarks, mppMarks, optionsAxis, phases, regions, tdBandwidthDivisorMarks, tdThresholdDivisorMarks, variables } from "@/pages/sum_stats_ind/static/ssiStatic";
 import MultipleSelectChip from "@/shared/MultipleSelect/multipleselect";
 import { GmailTreeViewWithText } from "@/shared/TreeSelect/TreeSelect";
+import { SummStatFilterState } from "@/types/filter-state";
 import {
   Box,
   Button,
@@ -21,29 +27,31 @@ import {
   Typography,
 } from "@mui/material";
 import { SelectChangeEvent } from "@mui/material/Select";
-import React, { useEffect, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  MouseEvent as ReactMouseEvent,
+  SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 
 interface SideFilterProps {
   tabValue: number;
   setTabValue: (value: number) => void;
-  filters: FilterState; // Use your FilterState type here
-  setFilters: React.Dispatch<React.SetStateAction<FilterState>>; // Function to set the filters
+  filters: SummStatFilterState;
+  setFilters: (value: SetStateAction<SummStatFilterState>) => void;
   applyFilters: () => Promise<void>;
 }
 
-type MappingKey = keyof typeof mappingToShort;
-
-const plotOptionsSingle = ["Violin", "Histogram", "Density", "Map"];
-const plotOptionsDouble = ["Points", "2D Density"];
-
-const SideFilter: React.FC<SideFilterProps> = ({
+const SideFilter = ({
   tabValue,
   setTabValue,
   filters,
   setFilters,
   applyFilters,
-}) => {
+}: SideFilterProps) => {
   const {
     tree_lin,
     var_1,
@@ -93,10 +101,10 @@ const SideFilter: React.FC<SideFilterProps> = ({
 
 
   const handleSingle =
-    (key: keyof FilterState) => (event: SelectChangeEvent<string>) => {
+    (key: keyof SummStatFilterState) => (event: SelectChangeEvent<string>) => {
       const value = event.target.value;
 
-      setFilters((prevFilters: FilterState) => ({
+      setFilters((prevFilters: SummStatFilterState) => ({
         ...prevFilters,
         [key]: value,
       }));
@@ -110,15 +118,15 @@ const SideFilter: React.FC<SideFilterProps> = ({
   };
 
   const handleMulti =
-    (key: keyof FilterState) =>
+    (key: keyof SummStatFilterState) =>
       (selectedValues: unknown) => {
         setFilters((prev) => ({ ...prev, [key]: toStringArray(selectedValues) }));
       };
 
 
   const handleCheckbox =
-    (key: keyof FilterState) =>
-      (event: React.ChangeEvent<HTMLInputElement>) => {
+    (key: keyof SummStatFilterState) =>
+      (event: ChangeEvent<HTMLInputElement>) => {
         setFilters((prevFilters) => ({
           ...prevFilters,
           [key]: event.target.checked,
@@ -126,12 +134,13 @@ const SideFilter: React.FC<SideFilterProps> = ({
       };
 
   const handleSlider =
-    (key: keyof FilterState) => (event: Event, newValue: number | number[]) => {
-      setFilters((prevFilters) => ({
-        ...prevFilters,
-        [key]: newValue as number,
-      }));
-    };
+    (key: keyof SummStatFilterState) =>
+      (_event: Event, newValue: number | number[]) => {
+        setFilters((prevFilters) => ({
+          ...prevFilters,
+          [key]: newValue as number,
+        }));
+      };
 
   const handleColor = (selectedValues: string[]) => {
 
@@ -166,22 +175,23 @@ const SideFilter: React.FC<SideFilterProps> = ({
     }));
   };
 
-  const options = tabValue === 0 ? plotOptionsSingle : plotOptionsDouble;
+  const options =
+    tabValue === 0 ? SUMM_STAT_PLOT_OPTIONS_SINGLE : SUMM_STAT_PLOT_OPTIONS_DOUBLE;
 
   const handleNumberInput =
-    (key: keyof FilterState) =>
-      (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (key: keyof SummStatFilterState) =>
+      (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const value = event.target.value;
         const numericValue = Number(value);
 
-        setFilters((prevFilters: FilterState) => ({
+        setFilters((prevFilters: SummStatFilterState) => ({
           ...prevFilters,
           [key]: numericValue,
         }));
       };
 
   const handleToggle = (
-    event: React.MouseEvent<HTMLElement>,
+    _event: ReactMouseEvent<HTMLElement>,
     newValue: number
   ) => {
     if (newValue !== null) {
@@ -194,182 +204,13 @@ const SideFilter: React.FC<SideFilterProps> = ({
   };
   const handleTreeSelection = (selectedItems: string[]) => {
     // Update tree_lin with selected tree items
-    setFilters((prevFilters: FilterState) => ({
+    setFilters((prevFilters: SummStatFilterState) => ({
       ...prevFilters,
       tree_lin: selectedItems,
     }));
   };
-  const getDefaultValuesForPlot = (plotType: string): Partial<FilterState> => {
-    switch (plotType) {
-      case "Violin":
-        return {
-          var_1: "Mean Length (bp)",
-          phases: ["Unphased"],
-          reg_1: [
-            "East Asia",
-            "Europe",
-            "South Asia",
-            "Oceania",
-            "Central Asia",
-          ],
-          mpp_1: 0.5,
-          chrms_1: ["Autosome"],
-          ancs_1: ["All"],
-          col: ["Region"],
-          fac_x: ["Dataset"],
-          fac_y: [],
-          mea_med_1: true,
-          y_axis: "Shared Axis",
-          min_y_axis: 0,
-          max_y_axis: 0,
-          tree_lin: [],
-          bandwidth_divisor: 30,
-        };
-      case "Density":
-        return {
-          var_1: "Mean Length (bp)",
-          phases: ["Phased", "Unphased"],
-          reg_1: [
-            "East Asia",
-            "Europe",
-            "South Asia",
-            "Oceania",
-            "Central Asia",
-          ],
-          mpp_1: 0.5,
-          chrms_1: ["Autosome"],
-          ancs_1: ["All"],
-          col: ["Region"],
-          fac_x: [],
-          fac_y: ["Phase state"],
-          mea_med_1: true,
-          x_axis: "Define Range",
-          min_x_axis: 35000,
-          max_x_axis: 95000,
-          y_axis: "Free Axis",
-          min_y_axis: 0,
-          max_y_axis: 0,
-          tree_lin: [],
-          bandwidth_divisor: 10,
-        };
-      case "Histogram":
-        return {
-          var_1: "Mean Length (bp)",
-          phases: ["Unphased", "Phased"],
-          reg_1: [
-            "East Asia",
-            "Europe",
-            "South Asia",
-            "Oceania",
-            "Central Asia",
-          ],
-          mpp_1: 0.5,
-          chrms_1: ["Autosome"],
-          ancs_1: ["All"],
-          col: ["Region"],
-          fac_x: ["Phase state"],
-          fac_y: ["Dataset"],
-          mea_med_1: true,
-          n_bins: 50,
-          x_axis: "Define Range",
-          min_x_axis: 35000,
-          max_x_axis: 95000,
-          y_axis: "Free Axis",
-          min_y_axis: 0,
-          max_y_axis: 0,
-          tree_lin: [""],
-        };
-      case "Map":
-        return {
-          map_data: true,
-          phases: ["Diploid", "Phased"],
-          reg_1: [
-            "East Asia",
-            "Europe",
-            "South Asia",
-            "Oceania",
-            "Central Asia",
-          ],
-          mpp_1: 0.5,
-          chrms_1: ["Autosome"],
-          ancs_1: ["All"],
-          var_1: "Mean Length (bp)",
-          map_data_rad: 50,
-          map_reg: true,
-          map_reg_rad: 15,
-          map_pop: false,
-          map_pop_rad: 10,
-          map_ind_rad: 3,
-          map_lat_jit: 1,
-          map_lon_jit: 1,
-        };
-      case "Points":
-        return {
-          var_2_1: "Mean Length (bp)",
-          var_2_2: "Max Length (bp)",
-          data_1: ["Diploid", "Phased"],
-          reg_1: [
-            "East Asia",
-            "Europe",
-            "South Asia",
-            "Oceania",
-            "Central Asia",
-          ],
-          mpp_1: 0.5,
-          chrms_1: ["Autosome"],
-          ancs_1: ["All"],
-          col: ["Region"],
-          fac_x: ["Dataset"],
-          fac_y: [],
-          mea_med_x: false,
-          mea_med_y: false,
-          x_axis: "Shared Axis",
-          min_x_axis: 0,
-          max_x_axis: 0,
-          y_axis: "Shared Axis",
-          min_y_axis: 0,
-          max_y_axis: 0,
-          tree_lin: ["HGDP00535_HGDP", "HGDP00535_PGNO", "HG02351_1KGP"],
-        };
-      case "2D Density":
-        return {
-          var_2_1: "Mean Length (bp)",
-          var_2_2: "Max Length (bp)",
-          phases: ["Diploid", "Phased"],
-          reg_1: [
-            "East Asia",
-            "Europe",
-            "South Asia",
-            "Oceania",
-            "Central Asia",
-          ],
-          mpp_1: 0.5,
-          chrms_1: ["Autosome"],
-          ancs_1: ["All"],
-          col: [],
-          fac_x: [],
-          fac_y: [],
-          mea_med_x: false,
-          mea_med_y: false,
-          x_axis: "Free Axis",
-          min_x_axis: 0,
-          max_x_axis: 0,
-          y_axis: "Free Axis",
-          min_y_axis: 0,
-          max_y_axis: 0,
-          tree_lin: [],
-          bandwidth_divisor: 10,
-          thresholds: 10,
-        };
-
-
-      default:
-        return {};
-    }
-  };
-
   return (
-    <Grid className="side-filter" container spacing={2}>
+    <Grid container spacing={2}>
       <Grid item xs={12}>
         <Typography variant="h5">1- Select Type of Plot:</Typography>
       </Grid>
@@ -411,10 +252,11 @@ const SideFilter: React.FC<SideFilterProps> = ({
           exclusive
           onChange={(event, newPlot) => {
             if (newPlot !== null) {
-              const defaultValues = getDefaultValuesForPlot(newPlot);
+              const plotType = newPlot as SummStatPlotType;
+              const defaultValues = DEFAULTS_BY_PLOT[plotType] ?? {};
               setFilters((prevFilters) => ({
                 ...prevFilters,
-                plot: newPlot,
+                plot: plotType,
                 ...defaultValues,
               }));
             }

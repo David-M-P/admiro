@@ -1,9 +1,21 @@
-import { anc_cmaps, data_cmaps, reg_cmaps } from "@/assets/colormaps";
-import { mapping } from "@/pages/sum_stats_ind/static/mapping";
-import { variables } from "@/pages/sum_stats_ind/static/ssiStatic";
+import { buildColorScale } from "@/pages/sum_stats_ind/domain/colorScale";
+import {
+  applyAdaptiveXAxisTickRotation,
+  getAdaptiveLinearAxisTickCount,
+} from "@/pages/sum_stats_ind/domain/axis";
+import {
+  isContinuousColumn,
+  isDiscreteColumn,
+  toLongValue,
+  toShortCol,
+} from "@/pages/sum_stats_ind/domain/columns";
+import { asNum, extentWithBuffer } from "@/pages/sum_stats_ind/domain/data";
+import { buildFacetGroups } from "@/pages/sum_stats_ind/domain/faceting";
+import { applyCommonDataFilters } from "@/pages/sum_stats_ind/domain/filtering";
+import { usePlotContainerSize } from "@/pages/sum_stats_ind/hooks/usePlotContainerSize";
 import { DataPoint } from "@/types/sum_stat_ind_datapoint";
 import * as d3 from "d3";
-import React, { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 
 type HistogramPlotProps = {
@@ -28,191 +40,6 @@ type HistogramPlotProps = {
   isSidebarVisible: boolean;
 };
 
-// -------------------- Helpers --------------------
-const toShortCol = (s: string) => mapping.toShort[s] ?? s;
-const toLongCol = (k: string) => mapping.toLong[k] ?? k;
-const asNum = (x: unknown) => (x === null || x === undefined ? NaN : +x);
-
-
-const keyFromCols =
-  (colsShort: string[]) =>
-    (d: DataPoint): string => {
-      if (colsShort.length === 0) return "__all__";
-      if (colsShort.length === 1) {
-        const v = (d as any)[colsShort[0]];
-        return v === null || v === undefined ? "" : String(v);
-      }
-      return colsShort
-        .map((c) => {
-          const v = (d as any)[c];
-          return v === null || v === undefined ? "" : String(v);
-        })
-        .join("_");
-    };
-
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-const makeNormMap = (m: Record<string, string>) => {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(m)) out[norm(k)] = v;
-  return out;
-};
-
-const valueShortMaps = {
-  anc: makeNormMap(mapping.values.anc.toShort),
-  reg: makeNormMap(mapping.values.reg.toShort),
-  chrom: makeNormMap(mapping.values.chrom.toShort),
-} as const;
-
-type ValueField = keyof typeof valueShortMaps;
-
-const toShortValue = (field: ValueField, v: string) => {
-  return valueShortMaps[field][norm(v)] ?? v;
-};
-
-function toLongValue(colKeyShort: string, v: unknown): string {
-  if (v === null || v === undefined) return "NA";
-  const s = String(v);
-  const valueMapToLong =
-    (mapping.values as any)[colKeyShort]?.toLong as
-    | Record<string, string>
-    | undefined;
-  return valueMapToLong?.[s] ?? s;
-}
-
-// -------------------- Color scale --------------------
-
-const old_createColorScale = (
-  data: DataPoint[],
-  col: string[],
-  var_1: string
-): {
-  getColor: (d: DataPoint) => string;
-  legendData: { label: string; color: string; extent?: [number, number] }[];
-  discreteOrContinuous: string;
-  globalColorOrder: string[];
-} => {
-  let getColor: (d: DataPoint) => string;
-  let legendData: { label: string; color: string; extent?: [number, number] }[];
-  let discreteOrContinuous: string;
-  let globalColorOrder: string[] = [];
-  const continuousShortSet = new Set(
-    variables.continousOptions.map(toShortCol)
-  );
-  const discreteShortSet = new Set(
-    variables.discreteOptions.map(toShortCol)
-  );
-
-  const var1Short = toShortCol(var_1);
-  const colShort = col.map(toShortCol);
-  const colorKey = keyFromCols(colShort);
-
-  // 1) If col length = 1 and it is empty => use default color
-  if (col.length === 1 && col[0] === "") {
-    const defaultColor = "steelblue";
-    getColor = () => defaultColor;
-    legendData = [{ label: "Default Color", color: defaultColor }];
-    discreteOrContinuous = "default";
-    globalColorOrder = [defaultColor];
-  }
-  else if (col.length === 1 && continuousShortSet.has(colShort[0])) {
-    const key = colShort[0];
-
-    // Convert to numbers safely and keep only finite values
-    const values = data
-      .map((d) => Number((d as any)[key]))
-      .filter(Number.isFinite);
-
-    if (values.length === 0) {
-      getColor = () => "steelblue";
-      legendData = [{ label: "No valid data", color: "steelblue" }];
-      discreteOrContinuous = "continuous";
-      globalColorOrder = [];
-    } else {
-      const [rawMin, rawMax] = d3.extent(values) as [number, number];
-
-      // Force integer min/max (for domain + labels)
-      let min = Math.floor(rawMin);
-      let max = Math.ceil(rawMax);
-
-      // Avoid degenerate domain if all values identical
-      if (min === max) {
-        min -= 1;
-        max += 1;
-      }
-
-      const extent: [number, number] = [min, max];
-      const colorScale = d3
-        .scaleSequential(d3.interpolateViridis)
-        .domain(extent);
-
-      getColor = (d) => {
-        const v = Number((d as any)[key]);
-        return Number.isFinite(v) ? colorScale(v) : "steelblue";
-      };
-
-      legendData = [
-        { label: `Min: ${min}`, color: colorScale(min), extent },
-        { label: `Max: ${max}`, color: colorScale(max), extent },
-      ];
-
-      discreteOrContinuous = "continuous";
-      globalColorOrder = [];
-    }
-  }
-  // 2) If col length = 1 and col[0] is in { "reg", "dat", "anc" }, use your custom maps
-  else if (col.length === 1 && discreteShortSet.has(colShort[0]) && ["reg", "dat", "anc"].includes(colShort[0])) {
-    let chosenMap: Record<string, string> = {};
-    if (colShort[0] === "reg") chosenMap = reg_cmaps;
-    else if (colShort[0] === "dat") chosenMap = data_cmaps;
-    else if (colShort[0] === "anc") chosenMap = anc_cmaps;
-
-    getColor = (d) => {
-      const val = colorKey(d);
-      if (!val) return "steelblue";
-      return chosenMap[val] || "steelblue";
-    };
-
-    const uniqueValues = Array.from(
-      new Set(
-        data
-          .map(colorKey)              // <- uses your helper
-          .filter((k) => k !== "")    // drop null/undefined mapped to ""
-      )
-    );
-    globalColorOrder = uniqueValues;
-
-    legendData = globalColorOrder.map((val) => ({
-      // if val is short-coded value, try mapping.values[col0Short].toLong
-      label: toLongValue(colShort[0], val),
-      color: chosenMap[val] || "steelblue",
-    }));
-
-    discreteOrContinuous = "discrete";
-  }
-  else {
-    const uniqueValues = Array.from(
-      new Set(data.map(colorKey).filter((k) => k !== ""))
-    );
-    globalColorOrder = uniqueValues;
-
-    const colorScale = d3
-      .scaleOrdinal(d3.schemeCategory10)
-      .domain(globalColorOrder)
-      .unknown("steelblue"); // optional but nice
-
-    getColor = (d) => colorScale(colorKey(d) || "");
-
-    legendData = globalColorOrder.map((value) => ({
-      label: String(value),
-      color: colorScale(value),
-    }));
-
-    discreteOrContinuous = "discrete";
-  }
-
-  return { getColor, legendData, discreteOrContinuous, globalColorOrder };
-};
-
 const createColorScale = (
   data: DataPoint[],
   col: string[],
@@ -225,148 +52,14 @@ const createColorScale = (
   colorKey: (d: DataPoint) => string;
   continuousColorFieldShort: string | null;
 } => {
-  let getColor: (d: DataPoint) => string;
-  let legendData: { label: string; color: string; extent?: [number, number] }[] = [];
-  let discreteOrContinuous: string;
-  let globalColorOrder: string[] = [];
-
-  const continuousShortSet = new Set(variables.continousOptions.map(toShortCol));
-  const discreteShortSet = new Set(variables.discreteOptions.map(toShortCol));
-
-  const colShort = col.map(toShortCol);
-  const colorKey = keyFromCols(colShort);
-
-  let continuousColorFieldShort: string | null = null;
-
-  // 1) Default color
-  if (col.length === 1 && col[0] === "") {
-    const defaultColor = "steelblue";
-    getColor = () => defaultColor;
-    legendData = [{ label: "Default Color", color: defaultColor }];
-    discreteOrContinuous = "default";
-    globalColorOrder = ["__default__"];               // IMPORTANT: order of KEYS, not colors
-    return {
-      getColor,
-      legendData,
-      discreteOrContinuous,
-      globalColorOrder,
-      colorKey: () => "__default__",                  // group key
-      continuousColorFieldShort: null,
-    };
-  }
-
-  // 2) Continuous
-  if (col.length === 1 && continuousShortSet.has(colShort[0])) {
-    const key = colShort[0];
-    continuousColorFieldShort = key;
-
-    const values = data
-      .map((d) => Number((d as any)[key]))
-      .filter(Number.isFinite);
-
-    if (values.length === 0) {
-      getColor = () => "steelblue";
-      legendData = [{ label: "No valid data", color: "steelblue" }];
-      discreteOrContinuous = "continuous";
-      globalColorOrder = [];
-    } else {
-      const [rawMin, rawMax] = d3.extent(values) as [number, number];
-      let min = Math.floor(rawMin);
-      let max = Math.ceil(rawMax);
-      if (min === max) { min -= 1; max += 1; }
-
-      const extent: [number, number] = [min, max];
-      const colorScale = d3.scaleSequential(d3.interpolateViridis).domain(extent);
-
-      getColor = (d) => {
-        const v = Number((d as any)[key]);
-        return Number.isFinite(v) ? colorScale(v) : "steelblue";
-      };
-
-      legendData = [
-        { label: `Min: ${min}`, color: colorScale(min), extent },
-        { label: `Max: ${max}`, color: colorScale(max), extent },
-      ];
-
-      discreteOrContinuous = "continuous";
-      globalColorOrder = [];
-    }
-
-    return {
-      getColor,
-      legendData,
-      discreteOrContinuous,
-      globalColorOrder,
-      colorKey,                                       // still return it
-      continuousColorFieldShort,
-    };
-  }
-
-  // 3) Discrete with custom maps
-  if (
-    col.length === 1 &&
-    discreteShortSet.has(colShort[0]) &&
-    ["reg", "dat", "anc"].includes(colShort[0])
-  ) {
-    let chosenMap: Record<string, string> = {};
-    if (colShort[0] === "reg") chosenMap = reg_cmaps;
-    else if (colShort[0] === "dat") chosenMap = data_cmaps;
-    else chosenMap = anc_cmaps;
-
-    getColor = (d) => {
-      const val = colorKey(d);
-      if (!val) return "steelblue";
-      return chosenMap[val] || "steelblue";
-    };
-
-    globalColorOrder = Array.from(
-      new Set(data.map(colorKey).filter((k) => k !== ""))
-    );
-
-    legendData = globalColorOrder.map((val) => ({
-      label: toLongValue(colShort[0] as any, val),
-      color: chosenMap[val] || "steelblue",
-    }));
-
-    discreteOrContinuous = "discrete";
-
-    return {
-      getColor,
-      legendData,
-      discreteOrContinuous,
-      globalColorOrder,   // order of KEYS (e.g. "EUR", "AFR", ...)
-      colorKey,
-      continuousColorFieldShort: null,
-    };
-  }
-
-  // 4) Generic discrete
-  {
-    globalColorOrder = Array.from(new Set(data.map(colorKey).filter((k) => k !== "")));
-
-    const colorScale = d3
-      .scaleOrdinal(d3.schemeCategory10)
-      .domain(globalColorOrder)
-      .unknown("steelblue");
-
-    getColor = (d) => colorScale(colorKey(d) || "");
-
-    legendData = globalColorOrder.map((value) => ({
-      label: String(value),
-      color: colorScale(value),
-    }));
-
-    discreteOrContinuous = "discrete";
-
-    return {
-      getColor,
-      legendData,
-      discreteOrContinuous,
-      globalColorOrder,
-      colorKey,
-      continuousColorFieldShort: null,
-    };
-  }
+  return buildColorScale({
+    rows: data,
+    colorColumns: col,
+    sortMetricColumn: var_1,
+    allowContinuous: true,
+    emptyGroupKey: "__default__",
+    defaultOrderValue: "__default__",
+  });
 };
 
 
@@ -494,19 +187,21 @@ const drawHistogram = (
   }
 
   // ---- Axes & titles ----
-  facetGroup
+  const xAxisGroup = facetGroup
     .append("g")
     .attr("transform", `translate(0,${plotHeight})`)
     .call(d3.axisBottom(xScale));
+  const xTicksRotated = applyAdaptiveXAxisTickRotation(xAxisGroup, plotWidth);
 
   facetGroup
     .append("text")
     .attr("x", plotWidth / 2)
-    .attr("y", plotHeight + 35)
+    .attr("y", plotHeight + (xTicksRotated ? 56 : 35))
     .attr("text-anchor", "middle")
     .text(x_label);
 
-  facetGroup.append("g").call(d3.axisLeft(yScale));
+  const yTickCount = getAdaptiveLinearAxisTickCount(plotHeight);
+  facetGroup.append("g").call(d3.axisLeft(yScale).ticks(yTickCount));
 
   facetGroup
     .append("text")
@@ -563,7 +258,7 @@ const drawHistogram = (
       .attr("y1", yScale.range()[0])
       .attr("y2", yScale.range()[1])
       .attr("stroke", "transparent")
-      .attr("stroke-width", 50)          // <-- buffer (px)
+      .attr("stroke-width", 10)          // <-- buffer (px)
       .style("pointer-events", "stroke") // <-- only the stroke is interactive
       .on("pointerenter", () => showTip(html))
       .on("pointermove", moveTip)
@@ -638,7 +333,6 @@ const drawHistogram = (
 
     const base = discreteOrContinuous === "default" ? "steelblue" : getColor(groupData[0]);
     const stroke = d3.color(base)?.darker(0.7).formatHex() ?? "#111";
-    const groupName = (discreteOrContinuous === "default") ? "All" : labelOf(k);
 
     facetGroup
       .append("line")
@@ -646,12 +340,13 @@ const drawHistogram = (
       .attr("x2", xScale(mean))
       .attr("y1", yScale.range()[0])
       .attr("y2", yScale.range()[1])
+      .attr("data-group", discreteOrContinuous === "default" ? "All" : labelOf(k))
       .attr("stroke", stroke)
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", "4,4");
     attachLineTooltip(
       xScale(mean),
-      `<strong>Median:</strong> ${mean.toFixed(2)}`
+      `<strong>Mean:</strong> ${mean.toFixed(2)}`
     );
 
     facetGroup
@@ -664,8 +359,8 @@ const drawHistogram = (
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", "2,4");
     attachLineTooltip(
-      xScale(mean),
-      `<strong>Median:</strong> ${mean.toFixed(2)}`
+      xScale(median),
+      `<strong>Median:</strong> ${median.toFixed(2)}`
     );
   }
 };
@@ -797,7 +492,7 @@ const drawBarplot = (
     .append("g")
     .attr("transform", `translate(0,${plotHeight})`)
     .call(
-      d3.axisBottom(xScale).tickFormat((d) => toLongValue(var1Short as any, d) as any)
+      d3.axisBottom(xScale).tickFormat((d) => toLongValue(var1Short, d) as any)
     );
 
   facetGroup
@@ -807,7 +502,8 @@ const drawBarplot = (
     .attr("text-anchor", "middle")
     .text(x_label);
 
-  facetGroup.append("g").call(d3.axisLeft(yScale));
+  const yTickCount = getAdaptiveLinearAxisTickCount(plotHeight);
+  facetGroup.append("g").call(d3.axisLeft(yScale).ticks(yTickCount));
 
   facetGroup
     .append("text")
@@ -825,7 +521,7 @@ const drawBarplot = (
     .text(title);
 };
 
-const HistogramComponent: React.FC<HistogramPlotProps> = ({
+const HistogramComponent = ({
   data,
   phases,
   tree_lin,
@@ -845,7 +541,7 @@ const HistogramComponent: React.FC<HistogramPlotProps> = ({
   min_x_axis,
   max_x_axis,
   isSidebarVisible
-}) => {
+}: HistogramPlotProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -870,8 +566,7 @@ const HistogramComponent: React.FC<HistogramPlotProps> = ({
         n_bins,
         x_axis,
         min_x_axis,
-        max_x_axis,
-        isSidebarVisible
+        max_x_axis
       );
     }
   }, [
@@ -920,8 +615,7 @@ const HistogramComponent: React.FC<HistogramPlotProps> = ({
         n_bins,
         x_axis,
         min_x_axis,
-        max_x_axis,
-        isSidebarVisible
+        max_x_axis
       );
     }
   }, [
@@ -948,20 +642,11 @@ const HistogramComponent: React.FC<HistogramPlotProps> = ({
     isSidebarVisible
   ]);
 
-  useEffect(() => {
-    window.addEventListener("resize", handleResize);
-
-    // Call handleResize immediately to initialize size
-    handleResize();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [data, handleResize]);
-
-  useEffect(() => {
-    handleResize();
-  }, [isSidebarVisible, handleResize]);
+  usePlotContainerSize({
+    containerRef,
+    onResize: handleResize,
+    deps: [isSidebarVisible],
+  });
   return (
     <div
       id="plot-container"
@@ -994,79 +679,21 @@ const fullHistogram = (
   x_axis: string,
   min_x_axis: number,
   max_x_axis: number,
-  isSidebarVisible: boolean,
 ) => {
-
-  const extentWithBuffer = (pts: DataPoint[], keyShort: string, bufferFrac = 0.05): [number, number] => {
-    const vals = pts
-      .map((d) => asNum((d as any)[keyShort]))
-      .filter(Number.isFinite);
-
-    // fallback (no valid numbers)
-    if (vals.length === 0) return [0, 1];
-
-    let mn = d3.min(vals)!;
-    let mx = d3.max(vals)!;
-
-    // avoid degenerate domain
-    if (mn === mx) {
-      mn -= 1;
-      mx += 1;
-    }
-
-    const buf = (mx - mn) * bufferFrac;
-    return [mn - buf, mx + buf];
-  };
-
   const containerSel = d3.select(svgElement.parentElement as HTMLElement);
 
   containerSel.selectAll("div.tooltip").remove();
 
-  const ancFields = ["ancAMR", "ancEAS", "ancSAS", "ancAFR", "ancEUR", "ancOCE"] as const;
-  function filterOutNullAncestryFields(data: DataPoint[], var_1: string, col: string[]) {
-    const var1Short = toShortCol(var_1);
-    const colShort = col.map(toShortCol);
-
-    const varIsAnc = ancFields.includes(var1Short as any);
-    const colHasAnc = colShort.some((c) => ancFields.includes(c as any));
-
-    if (!varIsAnc && !colHasAnc) return data;
-
-    return data.filter((d) => {
-      if (varIsAnc && (d as any)[var1Short] === null) return false;
-      if (colHasAnc) {
-        for (const c of colShort) {
-          if (ancFields.includes(c as any) && (d as any)[c] === null) return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  const excludeIndPhase = new Set(tree_lin ?? []);
-  const ancAllowed = new Set((ancs ?? []).map((v) => toShortValue("anc", v)));
-  const regAllowed = new Set((regs ?? []).map((v) => toShortValue("reg", v)));
-  const chromAllowed = new Set((chroms ?? []).map((v) => toShortValue("chrom", v)));
-
-  // --- Apply filters ---
-  let filteredData = data.filter((d) => {
-    if (excludeIndPhase.size > 0 && excludeIndPhase.has(d.ind_phase)) return false;
-    if (ancAllowed.size > 0 && !ancAllowed.has(d.anc)) return false;
-    if (regAllowed.size > 0 && !regAllowed.has(d.reg)) return false;
-
-    const chromPass =
-      chromAllowed.has(d.chrom) ||
-      (chromAllowed.has("A") && (d.chrom === "A" || /^\d+$/.test(d.chrom)));
-    if (!chromPass) return false;
-
-    return true;
+  data = applyCommonDataFilters({
+    rows: data,
+    treeLin: tree_lin,
+    ancestries: ancs,
+    regions: regs,
+    chromosomes: chroms,
+    ancestryRequiredColumns: [var_1, ...col],
   });
 
-  filteredData = filterOutNullAncestryFields(filteredData, var_1, col);
-  data = filteredData;
-
   const var1Short = toShortCol(var_1);
-  //data = data.filter((d) => Number.isFinite(asNum((d as any)[var1Short])));
 
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
@@ -1077,34 +704,6 @@ const fullHistogram = (
 
   const { getColor, legendData, discreteOrContinuous, colorKey, globalColorOrder, continuousColorFieldShort } =
     createColorScale(data, col, var_1);
-
-  // Facet Logic
-  type FacetGroup = { key: string; title: string; points: DataPoint[] };
-
-  function buildFacetGroups(data: DataPoint[], facLong: string[]): FacetGroup[] {
-    const facColsShort = (facLong ?? []).map(toShortCol).filter((k) => k.length > 0);
-
-    if (facColsShort.length === 0) {
-      return [{ key: "__all__", title: "", points: data }];
-    }
-
-    const groups = new Map<string, { title: string; points: DataPoint[] }>();
-
-    for (const d of data) {
-      const key = facColsShort.map((k) => `${k}=${String((d as any)[k] ?? "NA")}`).join("|");
-      const title = facColsShort
-        .map((k) => `${toLongCol(k)}: ${toLongValue(k, (d as any)[k])}`)
-        .join("\n");
-
-      const existing = groups.get(key);
-      if (!existing) groups.set(key, { title, points: [d] });
-      else existing.points.push(d);
-    }
-
-    return Array.from(groups.entries())
-      .map(([key, v]) => ({ key, title: v.title, points: v.points }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }
   const facetsX = buildFacetGroups(data, fac_x);
   const facetsY = buildFacetGroups(data, fac_y);
 
@@ -1242,15 +841,13 @@ const fullHistogram = (
       }
     });
   }
-  const discreteShortSet = new Set(variables.discreteOptions.map(toShortCol));
-  const continuousShortSet = new Set(
-    variables.continousOptions.map(toShortCol)
-  );
+  const isDiscreteVar = isDiscreteColumn(var1Short);
+  const isContinuousVar = isContinuousColumn(var1Short);
   function getGlobalCategoryOrder(data: DataPoint[], keyShort: string): string[] {
     const categories = Array.from(
       new Set(
         data
-          .map((d) => (d as any)[keyShort])
+          .map((d) => d[keyShort])
           .filter((v) => v !== null && v !== undefined && v !== "")
           .map(String)
       )
@@ -1262,7 +859,7 @@ const fullHistogram = (
 
   let globalCategoryOrder: string[] = [];
 
-  if (discreteShortSet.has(var1Short)) {
+  if (isDiscreteVar) {
     globalCategoryOrder = getGlobalCategoryOrder(data, var1Short);
   }
   if (facetingRequiredX && facetingRequiredY) {
@@ -1287,7 +884,7 @@ const fullHistogram = (
           );
         const title = `${gx.title} / ${gy.title}`;
         const x_label = var_1
-        if (discreteShortSet.has(var1Short)) {
+        if (isDiscreteVar) {
           const xScale = d3
             .scaleBand()
             .domain(globalCategoryOrder)
@@ -1313,7 +910,7 @@ const fullHistogram = (
             colorKey,
             continuousColorFieldShort
           );
-        } else if (continuousShortSet.has(var1Short)) {
+        } else if (isContinuousVar) {
           if (x_axis === "Define Range") {
             xScale.domain([min_x_axis, max_x_axis]).range([0, plotWidth]);
           } else if (x_axis === "Shared Axis") {
@@ -1326,7 +923,7 @@ const fullHistogram = (
           }
           const colShort = col.map(toShortCol);
           const colorLabel =
-            colShort.length === 1 ? (k: string) => toLongValue(colShort[0] as any, k) : (k: string) => k;
+            colShort.length === 1 ? (k: string) => toLongValue(colShort[0], k) : (k: string) => k;
           // Since var_1 is continuous, we draw a histogram
           drawHistogram(
             facetGroup,
@@ -1380,7 +977,7 @@ const fullHistogram = (
         );
       const title = `${gx.title}`;
       const x_label = var_1
-      if (discreteShortSet.has(var1Short)) {
+      if (isDiscreteVar) {
         const xScale = d3
           .scaleBand()
           .domain(globalCategoryOrder)
@@ -1407,7 +1004,7 @@ const fullHistogram = (
           colorKey,
           continuousColorFieldShort
         );
-      } else if (continuousShortSet.has(var1Short)) {
+      } else if (isContinuousVar) {
         if (x_axis === "Define Range") {
           xScale.domain([min_x_axis, max_x_axis]).range([0, plotWidth]);
         } else if (x_axis === "Shared Axis") {
@@ -1420,7 +1017,7 @@ const fullHistogram = (
         }
         const colShort = col.map(toShortCol);
         const colorLabel =
-          colShort.length === 1 ? (k: string) => toLongValue(colShort[0] as any, k) : (k: string) => k;
+          colShort.length === 1 ? (k: string) => toLongValue(colShort[0], k) : (k: string) => k;
         // Since var_1 is continuous, we draw a histogram
         drawHistogram(
           facetGroup,
@@ -1474,7 +1071,7 @@ const fullHistogram = (
 
       const title = `${gy.title}`;
       const x_label = var_1
-      if (discreteShortSet.has(var1Short)) {
+      if (isDiscreteVar) {
         const xScale = d3
           .scaleBand()
           .domain(globalCategoryOrder)
@@ -1501,7 +1098,7 @@ const fullHistogram = (
           colorKey,
           continuousColorFieldShort
         );
-      } else if (continuousShortSet.has(var1Short)) {
+      } else if (isContinuousVar) {
         if (x_axis === "Define Range") {
           xScale.domain([min_x_axis, max_x_axis]).range([0, plotWidth]);
         } else if (x_axis === "Shared Axis") {
@@ -1514,7 +1111,7 @@ const fullHistogram = (
         }
         const colShort = col.map(toShortCol);
         const colorLabel =
-          colShort.length === 1 ? (k: string) => toLongValue(colShort[0] as any, k) : (k: string) => k;
+          colShort.length === 1 ? (k: string) => toLongValue(colShort[0], k) : (k: string) => k;
         // Since var_1 is continuous, we draw a histogram
         drawHistogram(
           facetGroup,
@@ -1565,7 +1162,7 @@ const fullHistogram = (
       );
     const title = ``;
     const x_label = var_1
-    if (discreteShortSet.has(var1Short)) {
+    if (isDiscreteVar) {
       const xScale = d3
         .scaleBand()
         .domain(globalCategoryOrder)
@@ -1592,7 +1189,7 @@ const fullHistogram = (
         colorKey,
         continuousColorFieldShort
       );
-    } else if (continuousShortSet.has(var1Short)) {
+    } else if (isContinuousVar) {
       if (x_axis === "Define Range") {
         xScale.domain([min_x_axis, max_x_axis]).range([0, plotWidth]);
       } else if (x_axis === "Shared Axis") {
@@ -1605,7 +1202,7 @@ const fullHistogram = (
       }
       const colShort = col.map(toShortCol);
       const colorLabel =
-        colShort.length === 1 ? (k: string) => toLongValue(colShort[0] as any, k) : (k: string) => k;
+        colShort.length === 1 ? (k: string) => toLongValue(colShort[0], k) : (k: string) => k;
       // Since var_1 is continuous, we draw a histogram
       drawHistogram(
         facetGroup,

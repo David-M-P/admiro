@@ -1,5 +1,6 @@
 // Import statements remain the same
 import { TreeData } from "@/assets/treeData";
+import { TerminalTreeNode, TreeNode } from "@/types/tree";
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
@@ -9,7 +10,7 @@ import GroupIcon from "@mui/icons-material/Group";
 import MailIcon from "@mui/icons-material/Mail";
 import MapIcon from "@mui/icons-material/Map";
 import PersonIcon from "@mui/icons-material/Person";
-import Autocomplete from "@mui/material/Autocomplete";
+import Autocomplete, { AutocompleteInputChangeReason } from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
@@ -31,7 +32,9 @@ import {
   UseTreeItem2Parameters,
 } from "@mui/x-tree-view/useTreeItem2";
 import clsx from "clsx";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { SyntheticEvent, useCallback, useMemo, useState } from "react";
+
+const treeData = TreeData as TreeNode[];
 
 // CustomTreeItem component
 const CustomTreeItemRoot = styled(TreeItem2Root)(({ theme }) => ({
@@ -39,20 +42,20 @@ const CustomTreeItemRoot = styled(TreeItem2Root)(({ theme }) => ({
 }));
 
 // Helper function to count selected children for each node
-const countSelectedChildren = (node: any, selectedItems: string[]): number => {
+const countSelectedChildren = (node: TreeNode, selectedItems: string[]): number => {
   if (!node.children) return selectedItems.includes(node.id) ? 1 : 0;
   let count = 0;
-  node.children.forEach((child: any) => {
+  node.children.forEach((child) => {
     count += countSelectedChildren(child, selectedItems);
   });
   return count;
 };
 
 // Helper function to count total terminal descendants under a node
-const countTerminalDescendants = (node: any): number => {
+const countTerminalDescendants = (node: TreeNode): number => {
   if (!node.children) return 1; // Terminal node
   let count = 0;
-  node.children.forEach((child: any) => {
+  node.children.forEach((child) => {
     count += countTerminalDescendants(child);
   });
   return count;
@@ -114,24 +117,24 @@ const getIconForLevel = (nodeId: string) => {
 };
 
 // Helper function to determine if a node is terminal (has no children)
-const isTerminalNode = (nodeId: string, treeData: any[]) => {
-  const findNodeById = (id: string, nodes: any[]): boolean => {
-    for (const node of nodes) {
+const isTerminalNode = (nodeId: string, nodes: TreeNode[]) => {
+  const hasTerminalNode = (id: string, treeNodes: TreeNode[]): boolean => {
+    for (const node of treeNodes) {
       if (node.id === id) {
         return !node.children; // Return true if no children (terminal node)
       }
       if (node.children) {
-        const foundInChild = findNodeById(id, node.children);
+        const foundInChild = hasTerminalNode(id, node.children);
         if (foundInChild) return foundInChild;
       }
     }
     return false;
   };
-  return findNodeById(nodeId, treeData);
+  return hasTerminalNode(nodeId, nodes);
 };
 
 // Helper function to find a node by ID
-const findNodeById = (id: string, nodes: any[]): any | null => {
+const findNodeById = (id: string, nodes: TreeNode[]): TreeNode | null => {
   for (const node of nodes) {
     if (node.id === id) {
       return node;
@@ -145,10 +148,10 @@ const findNodeById = (id: string, nodes: any[]): any | null => {
 };
 
 // Helper function to get all terminal descendants under a node
-const getAllTerminalDescendants = (node: any): string[] => {
+const getAllTerminalDescendants = (node: TreeNode): string[] => {
   if (!node.children) return [node.id];
   let ids: string[] = [];
-  node.children.forEach((child: any) => {
+  node.children.forEach((child) => {
     ids = ids.concat(getAllTerminalDescendants(child));
   });
   return ids;
@@ -270,12 +273,12 @@ const CustomTreeItem = React.memo(
 
 // Recursive function to render tree items and pass selectedChildrenCount and totalTerminalDescendants
 const renderTreeItems = (
-  nodes: any,
+  nodes: TreeNode[],
   selectedItems: string[],
   handleNodeSelectToggle: (nodeId: string) => void,
   level: number = 0 // Add level parameter with default value 0
 ) => {
-  return nodes.map((node: any) => {
+  return nodes.map((node) => {
     const selectedChildrenCount = countSelectedChildren(node, selectedItems);
     const totalTerminalDescendants = countTerminalDescendants(node);
     const isRoot = level === 0; // Determine if the node is the root
@@ -313,7 +316,7 @@ export function GmailTreeView({
 }) {
   const handleNodeSelectToggle = useCallback(
     (nodeId: string) => {
-      const node = findNodeById(nodeId, TreeData);
+      const node = findNodeById(nodeId, treeData);
       if (node) {
         const terminalDescendants = getAllTerminalDescendants(node);
         const anySelected = terminalDescendants.some((id) =>
@@ -341,7 +344,7 @@ export function GmailTreeView({
     (newSelectedItems: string[]) => {
       // Filter the selection to ensure only terminal nodes are selected
       const validSelections = newSelectedItems.filter((id) =>
-        isTerminalNode(id, TreeData)
+        isTerminalNode(id, treeData)
       );
       // Merge new selections with previous ones
       const newSelections = [
@@ -353,7 +356,7 @@ export function GmailTreeView({
   );
 
   const memoizedTreeItems = useMemo(
-    () => renderTreeItems(TreeData, selectedItems, handleNodeSelectToggle),
+    () => renderTreeItems(treeData, selectedItems, handleNodeSelectToggle),
     [selectedItems, handleNodeSelectToggle]
   );
 
@@ -379,9 +382,9 @@ export function GmailTreeView({
 }
 
 // Helper function to extract terminal nodes
-const getTerminalNodes = (nodes: any): { id: string; name: string }[] => {
-  let terminalNodes: { id: string; name: string }[] = [];
-  nodes.forEach((node: any) => {
+const getTerminalNodes = (nodes: TreeNode[]): TerminalTreeNode[] => {
+  let terminalNodes: TerminalTreeNode[] = [];
+  nodes.forEach((node) => {
     if (!node.children) {
       terminalNodes.push({ id: node.id, name: node.name });
     } else {
@@ -399,7 +402,7 @@ export function GmailTreeViewWithText({
   onSelectedItemsChange: (selectedItems: string[]) => void;
 }) {
   const [inputValue, setInputValue] = useState(""); // State for input text
-  const terminalNodes = useMemo(() => getTerminalNodes(TreeData), []); // Memoize terminal nodes
+  const terminalNodes = useMemo(() => getTerminalNodes(treeData), []);
 
   // Memoize filtered options to prevent excessive recalculations
   const filteredOptions = useMemo(
@@ -408,7 +411,7 @@ export function GmailTreeViewWithText({
   );
 
   const handleAutocompleteChange = useCallback(
-    (event: any, newSelected: { id: string; name: string }[]) => {
+    (_event: SyntheticEvent, newSelected: TerminalTreeNode[]) => {
       const selectedIds = newSelected.map((node) => node.id);
       const newSelections = [...new Set([...selectedItems, ...selectedIds])]; // Merge with current selections
       onSelectedItemsChange(newSelections); // Add selected IDs to existing selectedItems
@@ -418,7 +421,11 @@ export function GmailTreeViewWithText({
   );
 
   const handleInputChange = useCallback(
-    (event: any, newInputValue: string, reason: string) => {
+    (
+      _event: SyntheticEvent,
+      newInputValue: string,
+      reason: AutocompleteInputChangeReason
+    ) => {
       // Ignore resets triggered by MUI, only handle normal changes
       if (reason !== "reset") {
         setInputValue(newInputValue);
@@ -439,7 +446,7 @@ export function GmailTreeViewWithText({
     (newSelectedItems: string[]) => {
       // Filter the selection to ensure only terminal nodes are selected
       const validSelections = newSelectedItems.filter((id) =>
-        isTerminalNode(id, TreeData)
+        isTerminalNode(id, treeData)
       );
       const newSelections = [
         ...new Set([...selectedItems, ...validSelections]),
@@ -451,7 +458,7 @@ export function GmailTreeViewWithText({
 
   const handleNodeSelectToggle = useCallback(
     (nodeId: string) => {
-      const node = findNodeById(nodeId, TreeData);
+      const node = findNodeById(nodeId, treeData);
       if (node) {
         const terminalDescendants = getAllTerminalDescendants(node);
         const anySelected = terminalDescendants.some((id) =>
@@ -476,7 +483,7 @@ export function GmailTreeViewWithText({
   );
 
   const memoizedTreeItems = useMemo(
-    () => renderTreeItems(TreeData, selectedItems, handleNodeSelectToggle),
+    () => renderTreeItems(treeData, selectedItems, handleNodeSelectToggle),
     [selectedItems, handleNodeSelectToggle]
   );
 
@@ -498,14 +505,18 @@ export function GmailTreeViewWithText({
               width: "100%", // Ensure full width
             }}
           >
-            {value.map((option, index) => (
-              <Chip
-                label={option.name}
-                {...getTagProps({ index })}
-                onDelete={() => handleDelete(option.id)}
-                deleteIcon={<CloseIcon />}
-              />
-            ))}
+            {value.map((option, index) => {
+              const { key, ...chipProps } = getTagProps({ index });
+              return (
+                <Chip
+                  key={String(key ?? option.id)}
+                  label={option.name}
+                  {...chipProps}
+                  onDelete={() => handleDelete(option.id)}
+                  deleteIcon={<CloseIcon />}
+                />
+              );
+            })}
           </Box>
         )}
         renderInput={(params) => (
