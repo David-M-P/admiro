@@ -243,6 +243,12 @@ def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
             f"Missing required columns {missing} in {rel_path}. Found columns: {df.columns}"
         )
 
+    # Frequency plots are sparse; drop zero/negative bins to reduce payload size.
+    # The frontend reconstructs omitted intervals as baseline frequency 0.
+    df = df.filter(pl.col("freq") > 0)
+    if df.is_empty():
+        return []
+
     df = df.select(required_cols).rename(
         {
             "chrom": "chromosome",

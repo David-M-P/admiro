@@ -209,10 +209,6 @@ export function FragVisReg() {
       if (!response.ok) {
         throw new Error(`Failed to fetch frequency data (HTTP ${response.status}).`);
       }
-      console.log(payloadPhaseState,
-        payloadRegion,
-        payloadAncestry,
-        Math.round(lineToFetch.filters.mpp * 100))
 
       const payload = await response.json();
       const rawRows = parseFrequencyResponse(payload);

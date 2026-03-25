@@ -20,6 +20,11 @@ type FrequencyPoint = FrequencyRow & {
   midpoint: number;
 };
 
+type FrequencySeriesPoint = {
+  position: number;
+  frequency: number;
+};
+
 const hasPositiveSize = (width: number, height: number) =>
   Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
 
@@ -32,20 +37,64 @@ const formatFrequencyTick = (value: d3.NumberValue) => {
   return number.toFixed(0);
 };
 
-const getPointsForChromosome = (
+const getRowsForChromosome = (
   rows: FrequencyRow[],
   chromosome: string,
   minBp: number,
   maxBp: number
 ) =>
   rows
-    .filter((row) => row.chromosome === chromosome && row.end >= minBp && row.start <= maxBp)
+    .filter(
+      (row) =>
+        row.chromosome === chromosome &&
+        row.end >= minBp &&
+        row.start <= maxBp &&
+        row.frequency > 0
+    )
+    .sort((a, b) => a.start - b.start);
+
+const toFrequencyPoints = (rows: FrequencyRow[], minBp: number, maxBp: number) =>
+  rows
     .map((row) => ({
       ...row,
       midpoint: (row.start + row.end) / 2,
     }))
     .filter((row) => row.midpoint >= minBp && row.midpoint <= maxBp)
     .sort((a, b) => a.midpoint - b.midpoint);
+
+const toSeriesWithZeroBaseline = (
+  rows: FrequencyRow[],
+  minBp: number,
+  maxBp: number
+): FrequencySeriesPoint[] => {
+  if (maxBp <= minBp) return [];
+
+  const series: FrequencySeriesPoint[] = [{ position: minBp, frequency: 0 }];
+  let cursor = minBp;
+
+  for (const row of rows) {
+    const start = Math.max(minBp, row.start);
+    const end = Math.min(maxBp, row.end);
+    if (end <= start) continue;
+
+    if (start > cursor) {
+      series.push({ position: start, frequency: 0 });
+    }
+
+    series.push({ position: start, frequency: row.frequency });
+    series.push({ position: end, frequency: row.frequency });
+    series.push({ position: end, frequency: 0 });
+    cursor = Math.max(cursor, end);
+  }
+
+  if (cursor < maxBp) {
+    series.push({ position: maxBp, frequency: 0 });
+  } else if (series.length === 1) {
+    series.push({ position: maxBp, frequency: 0 });
+  }
+
+  return series;
+};
 
 const drawPlot = (
   svgElement: SVGSVGElement,
@@ -143,10 +192,14 @@ const drawPlot = (
       .style("font-size", "12px")
       .text(chromosome);
 
-    const pointsByLine = activeLines.map((line) => ({
-      line,
-      points: getPointsForChromosome(line.rows, chromosome, limitStartBp, limitEndBp),
-    }));
+    const pointsByLine = activeLines.map((line) => {
+      const rows = getRowsForChromosome(line.rows, chromosome, limitStartBp, limitEndBp);
+      return {
+        line,
+        points: toFrequencyPoints(rows, limitStartBp, limitEndBp),
+        seriesPoints: toSeriesWithZeroBaseline(rows, limitStartBp, limitEndBp),
+      };
+    });
     const allPoints = pointsByLine.flatMap((entry) => entry.points);
     const maxFrequency = d3.max(allPoints, (point) => point.frequency) ?? 0;
     const yMax = maxFrequency > 0 ? maxFrequency * 1.1 : 1;
@@ -166,17 +219,17 @@ const drawPlot = (
       .style("font-size", "10px");
 
     const lineGenerator = d3
-      .line<FrequencyPoint>()
-      .x((point) => xScale(point.midpoint))
+      .line<FrequencySeriesPoint>()
+      .x((point) => xScale(point.position))
       .y((point) => yScale(point.frequency));
 
-    pointsByLine.forEach(({ line, points }) => {
-      if (points.length === 0) return;
+    pointsByLine.forEach(({ line, points, seriesPoints }) => {
+      if (seriesPoints.length === 0) return;
       const color = getFrequencyLineColor(line.filters);
 
       svg
         .append("path")
-        .datum(points)
+        .datum(seriesPoints)
         .attr("fill", "none")
         .attr("stroke", color)
         .attr("stroke-width", 2)
