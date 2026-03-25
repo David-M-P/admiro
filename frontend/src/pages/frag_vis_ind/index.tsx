@@ -3,18 +3,13 @@ import { PageWithSidebar } from "@/layout/PageWithSidebar";
 import ChromosomeComponent from "@/pages/frag_vis_ind/components/ChromosomeComponent";
 import SideFilter from "@/pages/frag_vis_ind/components/SideFilter";
 import { DataPoint } from "@/pages/frag_vis_ind/static/fviStatic";
+import { apiUrl } from "@/lib/api-url";
 import PlotDownloadButton from "@/shared/PlotDownloadButton/PlotDownloadButton";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
 import { FragVisFilterState } from "@/types/filter-state";
 import { Box } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-
-const apiUrl = (path: string) => {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE}${normalized}`;
-};
 const defaultChrms = chrms_all.options;
 const defaultAncs = ancestries_noAll.options;
 const defaultColor = "Ancestry";

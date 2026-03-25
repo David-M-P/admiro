@@ -10,6 +10,7 @@ import { INITIAL_SUMM_FILTERS } from "@/pages/sum_stats_ind/config/defaultFilter
 import { createSummStatGridColumns } from "@/pages/sum_stats_ind/config/gridColumns";
 import { mapping } from "@/pages/sum_stats_ind/static/mapping";
 import { mappingToLong } from "@/pages/sum_stats_ind/static/ssiStatic";
+import { apiUrl } from "@/lib/api-url";
 import PlotDownloadButton from "@/shared/PlotDownloadButton/PlotDownloadButton";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
 import { SummStatFilterState } from "@/types/filter-state";
@@ -43,12 +44,6 @@ import {
 
 
 ModuleRegistry.registerModules([AllCommunityModule]);
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-
-const apiUrl = (path: string) => {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE}${normalized}`;
-};
 
 const collectLeafColumns = (defs: (ColDef | ColGroupDef)[]): ColDef[] => {
   const result: ColDef[] = [];

@@ -1,5 +1,6 @@
 import { chr_range_marks, chrms_all, mpp_marks } from "@/assets/sharedOptions";
 import { PageWithSidebar } from "@/layout/PageWithSidebar";
+import { apiUrl } from "@/lib/api-url";
 import FrequencyChromosomePlot from "@/pages/frag_vis_reg/components/FrequencyChromosomePlot";
 import {
   DEFAULT_FRAG_VIS_REG_STATE,
@@ -38,13 +39,6 @@ import {
 } from "@mui/material";
 import { SelectChangeEvent } from "@mui/material/Select";
 import { useMemo, useRef, useState } from "react";
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-
-const apiUrl = (path: string) => {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE}${normalized}`;
-};
 
 const toFiniteNumber = (value: unknown): number | null => {
   const numeric = Number(value);

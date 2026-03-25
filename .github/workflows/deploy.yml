@@ -123,6 +123,13 @@ jobs:
             --image "$ACR_SERVER/admiro-backend:${TAG}" \
             --set-env-vars ADMIRO_CORS_ORIGINS="$CORS_ORIGINS"
 
+      - name: Disable backend auth gate
+        shell: bash
+        run: |
+          az containerapp auth update -g "$RG" -n "$BACK_APP" \
+            --enabled false \
+            --yes
+
       - name: Resolve backend URL
         shell: bash
         run: |
