@@ -19,6 +19,9 @@ type ChromosomeProps = {
   color: string;
 };
 
+const hasPositiveSize = (width: number, height: number): boolean =>
+  Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
+
 
 
 const createColorScale = (
@@ -181,22 +184,28 @@ const ChromosomeComponent: React.FC<ChromosomeProps> = ({
   }, [data, chrms, chrms_limits, mpp, min_length, color]);
 
   const handleResize = () => {
-    if (containerRef.current && svgRef.current && data) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      svgRef.current.setAttribute("width", String(width));
-      svgRef.current.setAttribute("height", String(height));
-      plotChromosomes(
-        svgRef.current!,
-        data,
-        lin,
-        chrms,
-        ancs,
-        mpp,
-        chrms_limits,
-        min_length,
-        color
-      );
+    if (!containerRef.current || !svgRef.current || !data) return;
+
+    const { width, height } = containerRef.current.getBoundingClientRect();
+    if (!hasPositiveSize(width, height)) {
+      d3.select(svgRef.current).selectAll("*").remove();
+      d3.select(containerRef.current).selectAll(".tooltip").remove();
+      return;
     }
+
+    svgRef.current.setAttribute("width", String(width));
+    svgRef.current.setAttribute("height", String(height));
+    plotChromosomes(
+      svgRef.current!,
+      data,
+      lin,
+      chrms,
+      ancs,
+      mpp,
+      chrms_limits,
+      min_length,
+      color
+    );
   };
 
   useEffect(() => {
@@ -240,6 +249,8 @@ const plotChromosomes = (
 ) => {
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
+  if (!container) return;
+
   d3.select(container).selectAll(".tooltip").remove();
   const containerMargin = { top: 0, right: 0, bottom: 0, left: -10 };
   const plotMargin = { top: 20, right: -30, bottom: 90, left: 75 };
@@ -249,10 +260,14 @@ const plotChromosomes = (
   const height = container
     ? container.clientHeight - containerMargin.top - containerMargin.bottom
     : 600;
+  if (!hasPositiveSize(width, height)) return;
 
   const plotHeight = height - plotMargin.top - plotMargin.bottom;
 
   const plotWidth = width - plotMargin.left - plotMargin.right;
+  if (!hasPositiveSize(plotWidth, plotHeight)) return;
+  if (!Array.isArray(chrms) || chrms.length === 0) return;
+
   const tooltip = d3.select(container).append("div").attr("class", "tooltip");
 
 
@@ -372,7 +387,7 @@ const plotChromosomes = (
   // Draw chromosomes
   orderedChrms.forEach((chrom, index) => {
     const chromLength = chrlen[chrom];
-    const scaledChromWidth = xScale(chromLength);
+    const scaledChromWidth = Math.max(0, xScale(chromLength));
 
     // Calculate the y position for the chromosome based on the index
     const yPos = index * (chrHeight + chrPadding);
@@ -418,8 +433,14 @@ const plotChromosomes = (
         );
       });
       individualData.forEach((d) => {
-        const startX = xScale(d.Start);
-        const endX = xScale(d.End);
+        const start = Math.min(d.Start, d.End);
+        const end = Math.max(d.Start, d.End);
+        const startX = xScale(start);
+        const endX = xScale(end);
+        const rectWidth = Math.max(0, endX - startX);
+        if (!Number.isFinite(startX) || !Number.isFinite(endX) || rectWidth <= 0) {
+          return;
+        }
         const indYPos = yPos + linHapIndex * partitionHeight;
 
         const fillColor = getColor(d);
@@ -428,7 +449,7 @@ const plotChromosomes = (
           .append("rect")
           .attr("x", startX)
           .attr("y", indYPos)
-          .attr("width", endX - startX)
+          .attr("width", rectWidth)
           .attr("height", partitionHeight)
           .attr("fill", fillColor)
           .on("mouseover", (event) => handleMouseOver(event, d))

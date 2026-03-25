@@ -40,6 +40,17 @@ type HistogramPlotProps = {
   isSidebarVisible: boolean;
 };
 
+const hasPositiveSize = (width: number, height: number): boolean =>
+  Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
+
+const clearHistogramSvg = (svgElement: SVGSVGElement) => {
+  d3.select(svgElement).selectAll("*").remove();
+  const container = svgElement.parentElement;
+  if (container) {
+    d3.select(container).selectAll("div.tooltip").remove();
+  }
+};
+
 const createColorScale = (
   data: DataPoint[],
   col: string[],
@@ -390,6 +401,7 @@ const drawBarplot = (
 
   // X domain fixed by globalCategoryOrder
   xScale.domain(globalCategoryOrder).range([0, plotWidth]).padding(0.1);
+  const barWidth = Math.max(0, xScale.bandwidth());
 
   // Build counts per category (respecting globalCategoryOrder)
   const categoryGroups = d3.group(
@@ -437,7 +449,7 @@ const drawBarplot = (
         .append("rect")
         .attr("x", xPos)
         .attr("y", yScale(count))
-        .attr("width", xScale.bandwidth())
+        .attr("width", barWidth)
         .attr("height", yScale(0) - yScale(count))
         .attr("fill", fill)
         .attr("stroke", "none");
@@ -478,7 +490,7 @@ const drawBarplot = (
         .append("rect")
         .attr("x", xPos)
         .attr("y", yScale(y1))
-        .attr("width", xScale.bandwidth())
+        .attr("width", barWidth)
         .attr("height", yScale(y0) - yScale(y1))
         .attr("fill", fill)
         .attr("stroke", "none");
@@ -592,32 +604,37 @@ const HistogramComponent = ({
   ]);
 
   const handleResize = useCallback(() => {
-    if (containerRef.current && svgRef.current && data) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      svgRef.current.setAttribute("width", String(width));
-      svgRef.current.setAttribute("height", String(height));
-      fullHistogram(
-        svgRef.current,
-        data,
-        phases,
-        tree_lin,
-        var_1,
-        ancs,
-        chroms,
-        regs,
-        col,
-        fac_x,
-        fac_y,
-        mea_med_1,
-        y_axis,
-        min_y_axis,
-        max_y_axis,
-        n_bins,
-        x_axis,
-        min_x_axis,
-        max_x_axis
-      );
+    if (!containerRef.current || !svgRef.current || !data) return;
+
+    const { width, height } = containerRef.current.getBoundingClientRect();
+    if (!hasPositiveSize(width, height)) {
+      clearHistogramSvg(svgRef.current);
+      return;
     }
+
+    svgRef.current.setAttribute("width", String(width));
+    svgRef.current.setAttribute("height", String(height));
+    fullHistogram(
+      svgRef.current,
+      data,
+      phases,
+      tree_lin,
+      var_1,
+      ancs,
+      chroms,
+      regs,
+      col,
+      fac_x,
+      fac_y,
+      mea_med_1,
+      y_axis,
+      min_y_axis,
+      max_y_axis,
+      n_bins,
+      x_axis,
+      min_x_axis,
+      max_x_axis
+    );
   }, [
     containerRef,
     svgRef,
@@ -680,7 +697,13 @@ const fullHistogram = (
   min_x_axis: number,
   max_x_axis: number,
 ) => {
-  const containerSel = d3.select(svgElement.parentElement as HTMLElement);
+  const container = svgElement.parentElement;
+  if (!container) {
+    clearHistogramSvg(svgElement);
+    return;
+  }
+
+  const containerSel = d3.select(container as HTMLElement);
 
   containerSel.selectAll("div.tooltip").remove();
 
@@ -696,11 +719,11 @@ const fullHistogram = (
   const var1Short = toShortCol(var_1);
 
   d3.select(svgElement).selectAll("*").remove();
-  const container = svgElement.parentElement;
 
   const margin = { top: 50, right: 30, bottom: 80, left: 75 };
-  const width = container ? container.clientWidth : 960;
-  const height = container ? container.clientHeight : 600;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (!hasPositiveSize(width, height)) return;
 
   const { getColor, legendData, discreteOrContinuous, colorKey, globalColorOrder, continuousColorFieldShort } =
     createColorScale(data, col, var_1);
@@ -723,6 +746,7 @@ const fullHistogram = (
     numRows === 1
       ? height - margin.bottom - margin.top - rowPadding
       : (height - margin.bottom - margin.top) / numRows - rowPadding;
+  if (!hasPositiveSize(plotWidth, plotHeight)) return;
 
   const globalXDomain: [number, number] | null =
     x_axis === "Define Range"
