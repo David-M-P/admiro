@@ -78,6 +78,12 @@ jobs:
           az containerapp update -g "$RG" -n "$BACK_APP" \
             --image "$ACR_SERVER/admiro-backend:${TAG}"
 
+      - name: Resolve backend URL
+        shell: bash
+        run: |
+          BACK_FQDN=$(az containerapp show -g "$RG" -n "$BACK_APP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "BACKEND_URL=https://${BACK_FQDN}" >> $GITHUB_ENV
+
       # ---------- FRONTEND ----------
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -91,7 +97,7 @@ jobs:
         shell: bash
         run: |
           npm ci
-          npm run build
+          VITE_API_BASE_URL="$BACKEND_URL" npm run build
           cp staticwebapp.config.json dist/
 
       - name: Deploy frontend to Static Web Apps

@@ -140,6 +140,9 @@ def filter_frag_vis_ind(ind_list):
         )
 
         df_list.append(sub_df)
+    if not df_list:
+        return []
+
     final_df = pl.concat(df_list)
     final_df = final_df.with_columns(
         [
@@ -203,6 +206,9 @@ def filter_summ_stats_ind(phases, mpp):
             ]
         )
         df_list.append(df)
+
+    if not df_list:
+        return {}
 
     final_df = pl.concat(df_list)
     return final_df.to_dict(as_series=False)

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         default="admiro-data", alias="ADMIRO_PARQUET_CONTAINER"
     )
     parquet_prefix: str = Field(default="v1", alias="ADMIRO_PARQUET_PREFIX")
-    parquet_anon: bool = Field(default=False, alias="ADMIRO_PARQUET_ANON")
+    parquet_anon: bool = Field(default=True, alias="ADMIRO_PARQUET_ANON")
 
     @property
     def cors_origins(self) -> List[str]:
