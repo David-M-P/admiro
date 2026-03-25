@@ -3,7 +3,7 @@
 ###############################
 
 # Base image: Python 3.12 slim
-FROM python:3.12-slim
+FROM acradmiroweu.azurecr.io/base/python:3.12-slim
 
 # Do not write .pyc files, and unbuffered stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1
