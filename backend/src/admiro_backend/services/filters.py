@@ -206,3 +206,46 @@ def filter_summ_stats_ind(phases, mpp):
 
     final_df = pl.concat(df_list)
     return final_df.to_dict(as_series=False)
+
+
+def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
+    if plot_type != "freq":
+        raise ValueError(f"Unsupported plot_type={plot_type!r}. Expected 'freq'.")
+
+    try:
+        mpp_int = int(mpp)
+    except (TypeError, ValueError):
+        raise ValueError(f"Unsupported mpp={mpp!r}. Expected integer-like numeric value.") from None
+
+    rel_path = (
+        f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+    )
+
+    try:
+        df = _parq_read_parquet(rel_path)
+    except (ResourceNotFoundError, FileNotFoundError) as e:
+        print(f"Missing parquet for frag_vis_reg: {rel_path} ({e})")
+        return []
+    except Exception as e:
+        print(f"Error reading parquet for frag_vis_reg: {rel_path} ({e})")
+        raise
+
+    required_cols = ["chrom", "start", "end", "n_contain", "n_total", "freq"]
+    missing = [column for column in required_cols if column not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing required columns {missing} in {rel_path}. Found columns: {df.columns}"
+        )
+
+    df = df.select(required_cols).rename(
+        {
+            "chrom": "chromosome",
+            "start": "start",
+            "end": "end",
+            "n_contain": "n_with_archaic",
+            "n_total": "n_total",
+            "freq": "frequency",
+        }
+    )
+
+    return df.to_dicts()
