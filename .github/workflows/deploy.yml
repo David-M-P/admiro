@@ -57,12 +57,45 @@ jobs:
       # ---------- BACKEND ----------
       - name: Refresh mirrored Python base image
         shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          az acr import \
-            --name "$ACR_NAME" \
-            --source docker.io/library/python:3.12-slim \
-            --image base/python:3.12-slim \
+          set -euo pipefail
+
+          IMPORT_ARGS=(
+            --name "$ACR_NAME"
+            --source docker.io/library/python:3.12-slim
+            --image base/python:3.12-slim
             --force
+          )
+
+          if [ -n "${DOCKERHUB_USERNAME:-}" ] && [ -n "${DOCKERHUB_TOKEN:-}" ]; then
+            echo "Using authenticated Docker Hub import."
+            IMPORT_ARGS+=(--username "$DOCKERHUB_USERNAME" --password "$DOCKERHUB_TOKEN")
+          else
+            echo "Docker Hub credentials not configured; attempting anonymous import."
+          fi
+
+          if az acr import "${IMPORT_ARGS[@]}"; then
+            echo "Base image refreshed in ACR."
+            exit 0
+          fi
+
+          echo "Base import failed. Checking if base/python:3.12-slim already exists in ACR..."
+          TAG_EXISTS=$(az acr repository show-tags \
+            --name "$ACR_NAME" \
+            --repository base/python \
+            --query "contains(@, '3.12-slim')" \
+            -o tsv || echo "false")
+
+          if [ "$TAG_EXISTS" = "true" ]; then
+            echo "Using existing mirrored base image in ACR."
+            exit 0
+          fi
+
+          echo "No mirrored base image available and import failed."
+          exit 1
 
       - name: Build + push backend (ACR build)
         shell: bash
