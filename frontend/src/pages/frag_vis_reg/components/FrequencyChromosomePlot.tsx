@@ -13,6 +13,7 @@ type FrequencyChromosomePlotProps = {
   lines: FrequencyLineState[];
   chrms: string[];
   chrmsLimits: [number, number];
+  smoothingWindowKbp: number;
   isSidebarVisible: boolean;
 };
 
@@ -37,6 +38,17 @@ const formatFrequencyTick = (value: d3.NumberValue) => {
   return number.toFixed(0);
 };
 
+const toRoundedUpAxisMax = (maxFrequency: number) => {
+  if (!Number.isFinite(maxFrequency) || maxFrequency <= 0) return 1;
+
+  const step = d3.tickStep(0, maxFrequency, 2);
+  if (!Number.isFinite(step) || step <= 0) return maxFrequency;
+
+  const rounded = Math.ceil(maxFrequency / step) * step;
+  const normalized = Number(rounded.toPrecision(12));
+  return normalized > 0 ? normalized : 1;
+};
+
 const getRowsForChromosome = (
   rows: FrequencyRow[],
   chromosome: string,
@@ -53,9 +65,77 @@ const getRowsForChromosome = (
     )
     .sort((a, b) => (a.start !== b.start ? a.start - b.start : a.end - b.end));
 
+const toWindowMaxSmoothedRows = (
+  chromosome: string,
+  rows: FrequencyRow[],
+  minBp: number,
+  maxBp: number,
+  smoothingWindowBp: number
+): FrequencyRow[] => {
+  if (smoothingWindowBp <= 0) {
+    return rows
+      .map((row) => ({
+        ...row,
+        start: Math.max(minBp, row.start),
+        end: Math.min(maxBp, row.end),
+      }))
+      .filter((row) => row.end > row.start);
+  }
+
+  const windowBp = Math.max(1, Math.floor(smoothingWindowBp));
+  const clampedMinBp = Math.max(0, Math.floor(minBp));
+  const clampedMaxBp = Math.max(clampedMinBp + 1, Math.ceil(maxBp));
+  const minBin = Math.floor(clampedMinBp / windowBp);
+  const maxBin = Math.floor((clampedMaxBp - 1) / windowBp);
+  const binCount = maxBin - minBin + 1;
+  if (binCount <= 0) return [];
+
+  const binMaxFrequency = Array.from({ length: binCount }, () => 0);
+  const binNWithArchaic = Array.from({ length: binCount }, () => 0);
+  const binNTotal = Array.from({ length: binCount }, () => 0);
+
+  for (const row of rows) {
+    if (row.frequency <= 0) continue;
+
+    const start = Math.max(clampedMinBp, row.start);
+    const end = Math.min(clampedMaxBp, row.end);
+    if (end <= start) continue;
+
+    const firstBin = Math.max(minBin, Math.floor(start / windowBp));
+    const lastBin = Math.min(maxBin, Math.floor((end - 1) / windowBp));
+
+    for (let bin = firstBin; bin <= lastBin; bin += 1) {
+      const binIndex = bin - minBin;
+      if (row.frequency > binMaxFrequency[binIndex]) {
+        binMaxFrequency[binIndex] = row.frequency;
+        binNWithArchaic[binIndex] = row.n_with_archaic;
+        binNTotal[binIndex] = row.n_total;
+      }
+    }
+  }
+
+  const smoothedRows: FrequencyRow[] = [];
+  for (let bin = minBin; bin <= maxBin; bin += 1) {
+    const binIndex = bin - minBin;
+    const binStart = Math.max(clampedMinBp, bin * windowBp);
+    const binEnd = Math.min(clampedMaxBp, (bin + 1) * windowBp);
+    if (binEnd <= binStart) continue;
+
+    smoothedRows.push({
+      chromosome,
+      start: binStart,
+      end: binEnd,
+      n_with_archaic: binNWithArchaic[binIndex],
+      n_total: binNTotal[binIndex],
+      frequency: binMaxFrequency[binIndex],
+    });
+  }
+
+  return smoothedRows;
+};
+
 const toFrequencyPoints = (rows: FrequencyRow[], minBp: number, maxBp: number) =>
   rows
-    .filter((row) => row.frequency > 0)
     .map((row) => ({
       ...row,
       midpoint: (row.start + row.end) / 2,
@@ -63,77 +143,30 @@ const toFrequencyPoints = (rows: FrequencyRow[], minBp: number, maxBp: number) =
     .filter((row) => row.midpoint >= minBp && row.midpoint <= maxBp)
     .sort((a, b) => a.midpoint - b.midpoint);
 
-const compactSeries = (series: FrequencySeriesPoint[]): FrequencySeriesPoint[] => {
-  const compacted: FrequencySeriesPoint[] = [];
-  for (const point of series) {
-    const previous = compacted[compacted.length - 1];
-    if (
-      previous &&
-      previous.position === point.position &&
-      previous.frequency === point.frequency
-    ) {
-      continue;
+const toPositiveFrequencyPoints = (points: FrequencyPoint[]) =>
+  points.filter((point) => point.frequency > 0);
+
+const toLineSeries = (points: FrequencyPoint[]): FrequencySeriesPoint[] => {
+  if (points.length === 0) return [];
+
+  const series: FrequencySeriesPoint[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    const previous = index > 0 ? points[index - 1] : null;
+    if (previous && point.start > previous.end) {
+      series.push({ position: Number.NaN, frequency: Number.NaN });
     }
-    compacted.push(point);
+    series.push({ position: point.midpoint, frequency: point.frequency });
   }
-  return compacted;
-};
-
-const toSeriesWithZeroBaseline = (
-  rows: FrequencyRow[],
-  minBp: number,
-  maxBp: number
-): FrequencySeriesPoint[] => {
-  if (maxBp <= minBp) return [];
-
-  const series: FrequencySeriesPoint[] = [{ position: minBp, frequency: 0 }];
-  let cursor = minBp;
-  let currentFrequency = 0;
-
-  for (const row of rows) {
-    const start = Math.max(minBp, row.start);
-    const end = Math.min(maxBp, row.end);
-    const segmentStart = Math.max(start, cursor);
-
-    if (end <= start || segmentStart >= end) continue;
-
-    if (segmentStart > cursor) {
-      if (currentFrequency !== 0) {
-        series.push({ position: cursor, frequency: 0 });
-        currentFrequency = 0;
-      }
-      series.push({ position: segmentStart, frequency: 0 });
-      cursor = segmentStart;
-    }
-
-    if (currentFrequency !== row.frequency) {
-      series.push({ position: segmentStart, frequency: row.frequency });
-      currentFrequency = row.frequency;
-    } else if (series[series.length - 1]?.position !== segmentStart) {
-      series.push({ position: segmentStart, frequency: currentFrequency });
-    }
-
-    series.push({ position: end, frequency: row.frequency });
-    cursor = end;
-  }
-
-  if (cursor < maxBp) {
-    if (currentFrequency !== 0) {
-      series.push({ position: cursor, frequency: 0 });
-    }
-    series.push({ position: maxBp, frequency: 0 });
-  } else if (series.length === 1) {
-    series.push({ position: maxBp, frequency: 0 });
-  }
-
-  return compactSeries(series);
+  return series;
 };
 
 const drawPlot = (
   svgElement: SVGSVGElement,
   lines: FrequencyLineState[],
   chromosomes: string[],
-  chrmsLimits: [number, number]
+  chrmsLimits: [number, number],
+  smoothingWindowKbp: number
 ) => {
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
@@ -159,6 +192,7 @@ const drawPlot = (
 
   const limitStartBp = Math.max(0, Math.min(chrmsLimits[0], chrmsLimits[1]) * 1000);
   const limitEndBp = Math.max(limitStartBp + 1, Math.max(chrmsLimits[0], chrmsLimits[1]) * 1000);
+  const smoothingWindowBp = Math.round(smoothingWindowKbp * 1000);
   const xScale = d3.scaleLinear().domain([limitStartBp, limitEndBp]).range([0, width]);
 
   const activeLines = lines.filter((line) => line.visible);
@@ -226,25 +260,39 @@ const drawPlot = (
       .text(chromosome);
 
     const pointsByLine = activeLines.map((line) => {
-      const rows = getRowsForChromosome(line.rows, chromosome, limitStartBp, limitEndBp);
+      const chromosomeRows = getRowsForChromosome(
+        line.rows,
+        chromosome,
+        chromosomeVisibleStart,
+        chromosomeVisibleEnd
+      );
+      const rows = toWindowMaxSmoothedRows(
+        chromosome,
+        chromosomeRows,
+        chromosomeVisibleStart,
+        chromosomeVisibleEnd,
+        smoothingWindowBp
+      );
+      const points = toFrequencyPoints(rows, chromosomeVisibleStart, chromosomeVisibleEnd);
       return {
         line,
-        points: toFrequencyPoints(rows, limitStartBp, limitEndBp),
-        seriesPoints: toSeriesWithZeroBaseline(rows, limitStartBp, limitEndBp),
+        points,
+        markerPoints: toPositiveFrequencyPoints(points),
+        seriesPoints: toLineSeries(points),
       };
     });
-    const allSeriesPoints = pointsByLine.flatMap((entry) => entry.seriesPoints);
-    const maxFrequency = d3.max(allSeriesPoints, (point) => point.frequency) ?? 0;
-    const yMax = maxFrequency > 0 ? maxFrequency * 1.1 : 1;
+    const allPoints = pointsByLine.flatMap((entry) => entry.points);
+    const maxFrequency = d3.max(allPoints, (point) => point.frequency) ?? 0;
+    const yMax = toRoundedUpAxisMax(maxFrequency);
 
-    const yScale = d3.scaleLinear().domain([0, yMax]).range([yPos + chrHeight, yPos]).nice();
+    const yScale = d3.scaleLinear().domain([0, yMax]).range([yPos + chrHeight, yPos]);
     svg
       .append("g")
       .attr("transform", "translate(0,0)")
       .call(
         d3
           .axisLeft(yScale)
-          .ticks(3)
+          .tickValues([0, yMax])
           .tickSizeOuter(0)
           .tickFormat((value) => formatFrequencyTick(value))
       )
@@ -253,12 +301,13 @@ const drawPlot = (
 
     const lineGenerator = d3
       .line<FrequencySeriesPoint>()
+      .defined((point) => Number.isFinite(point.position) && Number.isFinite(point.frequency))
       .x((point) => xScale(point.position))
       .y((point) => yScale(point.frequency));
 
-    pointsByLine.forEach(({ line, points, seriesPoints }) => {
+    pointsByLine.forEach(({ line, markerPoints, seriesPoints }) => {
       if (seriesPoints.length === 0) return;
-      const color = getFrequencyLineColor(line.filters);
+      const color = getFrequencyLineColor(line.lineId);
 
       svg
         .append("path")
@@ -273,12 +322,14 @@ const drawPlot = (
       svg
         .append("g")
         .selectAll("circle")
-        .data(points)
+        .data(markerPoints)
         .join("circle")
         .attr("cx", (point) => xScale(point.midpoint))
         .attr("cy", (point) => yScale(point.frequency))
-        .attr("r", 2)
-        .attr("fill", color)
+        .attr("r", 6)
+        .attr("fill", "transparent")
+        .attr("stroke", "none")
+        .style("pointer-events", "all")
         .on("mouseover", (event, point) => showTooltip(event, point, line))
         .on("mousemove", moveTooltip)
         .on("mouseout", hideTooltip);
@@ -310,6 +361,7 @@ const FrequencyChromosomePlot = ({
   lines,
   chrms,
   chrmsLimits,
+  smoothingWindowKbp,
   isSidebarVisible,
 }: FrequencyChromosomePlotProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -323,8 +375,8 @@ const FrequencyChromosomePlot = ({
       d3.select(containerRef.current).selectAll(".tooltip").remove();
       return;
     }
-    drawPlot(svgRef.current, lines, chrms, chrmsLimits);
-  }, [chrms, chrmsLimits, lines]);
+    drawPlot(svgRef.current, lines, chrms, chrmsLimits, smoothingWindowKbp);
+  }, [chrms, chrmsLimits, lines, smoothingWindowKbp]);
 
   useEffect(() => {
     redraw();

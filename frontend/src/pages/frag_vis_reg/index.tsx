@@ -11,6 +11,10 @@ import {
   FREQUENCY_PHASE_TO_PAYLOAD,
   FREQUENCY_REGION_OPTIONS,
   FREQUENCY_REGION_TO_PAYLOAD,
+  FREQUENCY_SMOOTHING_WINDOW_MARKS,
+  FREQUENCY_SMOOTHING_WINDOW_MAX_KBP,
+  FREQUENCY_SMOOTHING_WINDOW_MIN_KBP,
+  FREQUENCY_SMOOTHING_WINDOW_STEP_KBP,
   FragVisRegPlotType,
   FrequencyLineFilters,
   FrequencyLineState,
@@ -494,6 +498,33 @@ export function FragVisReg() {
                     max={250000}
                     sx={{ width: "85%" }}
                   />
+
+                  <Typography className="contrast-text" sx={{ mt: 3, textAlign: "center" }}>
+                    Smoothing window (kbp, max in window)
+                  </Typography>
+                  <Slider
+                    value={state.smoothing_window_kbp}
+                    onChange={(_event, newValue) => {
+                      setState((prevState) => ({
+                        ...prevState,
+                        smoothing_window_kbp: newValue as number,
+                      }));
+                    }}
+                    aria-labelledby="frag-vis-reg-smoothing-window-slider"
+                    valueLabelDisplay="auto"
+                    step={FREQUENCY_SMOOTHING_WINDOW_STEP_KBP}
+                    marks={FREQUENCY_SMOOTHING_WINDOW_MARKS}
+                    min={FREQUENCY_SMOOTHING_WINDOW_MIN_KBP}
+                    max={FREQUENCY_SMOOTHING_WINDOW_MAX_KBP}
+                    sx={{ width: "85%" }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 2, textAlign: "center" }}
+                  >
+                    Larger values reduce noise more strongly.
+                  </Typography>
                 </Box>
               </Grid>
 
@@ -501,36 +532,43 @@ export function FragVisReg() {
                 <Typography variant="h5">3- Frequency Lines (1 to 10):</Typography>
               </Grid>
               <Grid item xs={12}>
-                <ToggleButtonGroup
-                  value={state.selectedLineId}
-                  exclusive
-                  fullWidth
-                  onChange={(_event, newValue: number | null) => {
-                    if (newValue === null) return;
-                    setState((prevState) => ({
-                      ...prevState,
-                      selectedLineId: newValue,
-                    }));
-                  }}
+                <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                    "& .MuiToggleButtonGroup-grouped": {
-                      height: "38px",
-                      color: "#003d73",
-                      "&.Mui-selected": {
-                        backgroundColor: "primary.main",
-                        color: "white",
-                      },
-                    },
+                    gap: 0.75,
                   }}
                 >
                   {state.lines.map((line) => (
-                    <ToggleButton key={line.lineId} value={line.lineId} aria-label={`line-${line.lineId}`}>
+                    <ToggleButton
+                      key={line.lineId}
+                      value={line.lineId}
+                      selected={state.selectedLineId === line.lineId}
+                      aria-label={`line-${line.lineId}`}
+                      onChange={() =>
+                        setState((prevState) => ({
+                          ...prevState,
+                          selectedLineId: line.lineId,
+                        }))
+                      }
+                      sx={{
+                        height: "38px",
+                        minWidth: 0,
+                        color: "#003d73",
+                        borderColor: "divider",
+                        "&.Mui-selected": {
+                          backgroundColor: "primary.main",
+                          color: "white",
+                          "&:hover": {
+                            backgroundColor: "primary.dark",
+                          },
+                        },
+                      }}
+                    >
                       L{line.lineId}
                     </ToggleButton>
                   ))}
-                </ToggleButtonGroup>
+                </Box>
               </Grid>
 
               <Grid item xs={12}>
@@ -643,8 +681,8 @@ export function FragVisReg() {
                   </Button>
                   <Button
                     variant="outlined"
-                    color="secondary"
-                    sx={{ flexGrow: 1 }}
+                    color="primary"
+                    sx={{ flexGrow: 1, color: "primary.main", borderColor: "primary.main" }}
                     onClick={removeSelectedLine}
                   >
                     Remove Selected Line
@@ -686,55 +724,69 @@ export function FragVisReg() {
               lines={state.lines}
               chrms={state.chrms}
               chrmsLimits={state.chrms_limits}
+              smoothingWindowKbp={state.smoothing_window_kbp}
               isSidebarVisible={isSidebarVisible}
             />
+            <div className="plot-action-bar">
+              <PlotDownloadButton plotRef={plotRef} fileName="frag_vis_reg_frequency" />
+            </div>
+          </Box>
+          <Box
+            sx={{
+              mt: 1,
+              border: "1px solid #d9dfec",
+              borderRadius: "8px",
+              bgcolor: "white",
+              px: 1.25,
+              py: 0.9,
+              maxHeight: 112,
+              overflowY: "auto",
+              flexShrink: 0,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ mb: 0.6 }}>
+              Legend
+            </Typography>
+            {visibleLines.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Apply at least one line to draw data.
+              </Typography>
+            )}
             <Box
               sx={{
-                position: "absolute",
-                left: 12,
-                top: 12,
-                border: "1px solid #d9dfec",
-                borderRadius: "8px",
-                bgcolor: "rgba(255,255,255,0.95)",
-                px: 1,
-                py: 0.5,
-                maxWidth: "70%",
-                maxHeight: "35%",
-                overflowY: "auto",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 0.5,
               }}
             >
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                Active Lines
-              </Typography>
-              {visibleLines.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
-                  Apply at least one line to draw data.
-                </Typography>
-              )}
               {visibleLines.map((line) => (
                 <Box
                   key={line.lineId}
-                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}
+                  sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}
                 >
                   <Box
                     sx={{
                       width: 12,
                       height: 12,
                       borderRadius: "2px",
-                      backgroundColor: getFrequencyLineColor(line.filters),
+                      backgroundColor: getFrequencyLineColor(line.lineId),
                       border: "1px solid #0000001f",
+                      flexShrink: 0,
                     }}
                   />
-                  <Typography variant="caption" sx={{ lineHeight: 1.2 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    title={`${getFrequencyLineLabel(line.lineId, line.filters)}${
+                      line.status === "loading" ? " (loading)" : ""
+                    }`}
+                  >
                     {getFrequencyLineLabel(line.lineId, line.filters)}
                     {line.status === "loading" ? " (loading)" : ""}
                   </Typography>
                 </Box>
               ))}
             </Box>
-            <div className="plot-action-bar">
-              <PlotDownloadButton plotRef={plotRef} fileName="frag_vis_reg_frequency" />
-            </div>
           </Box>
         </Box>
       ) : (

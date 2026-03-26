@@ -93,11 +93,22 @@ export interface FragVisRegState {
   plotType: FragVisRegPlotType;
   chrms: string[];
   chrms_limits: [number, number];
+  smoothing_window_kbp: number;
   selectedLineId: number;
   lines: FrequencyLineState[];
 }
 
 export const MAX_FREQUENCY_LINES = 10;
+export const FREQUENCY_SMOOTHING_WINDOW_MIN_KBP = 250;
+export const FREQUENCY_SMOOTHING_WINDOW_MAX_KBP = 2750;
+export const FREQUENCY_SMOOTHING_WINDOW_STEP_KBP = 250;
+export const DEFAULT_FREQUENCY_SMOOTHING_WINDOW_KBP = 1000;
+export const FREQUENCY_SMOOTHING_WINDOW_MARKS = [
+  { value: 250, label: "250" },
+  { value: 1500, label: "1,500" },
+  { value: 2750, label: "2,750" },
+];
+
 export const DEFAULT_FREQUENCY_LINE_FILTERS: FrequencyLineFilters = {
   phase_state: "Unphased",
   region: "Global",
@@ -109,6 +120,7 @@ export const DEFAULT_FRAG_VIS_REG_STATE: FragVisRegState = {
   plotType: "Frequency",
   chrms: [...chrms_all.options],
   chrms_limits: [0, 250000],
+  smoothing_window_kbp: DEFAULT_FREQUENCY_SMOOTHING_WINDOW_KBP,
   selectedLineId: 1,
   lines: Array.from({ length: MAX_FREQUENCY_LINES }, (_, index) => ({
     lineId: index + 1,
@@ -127,25 +139,21 @@ export const sortChromosomes = (chromosomes: string[]) => {
   return unique.sort((a, b) => CHROMOSOME_ORDER.indexOf(a) - CHROMOSOME_ORDER.indexOf(b));
 };
 
-const fnv32a = (value: string): number => {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-};
+const FREQUENCY_LINE_PALETTE = [
+  "#4e79a7",
+  "#f28e2b",
+  "#e15759",
+  "#76b7b2",
+  "#59a14f",
+  "#edc949",
+  "#af7aa1",
+  "#ff9da7",
+  "#9c755f",
+  "#bab0ab",
+] as const;
 
-export const frequencyLineKey = (filters: FrequencyLineFilters) =>
-  `${filters.phase_state}_${filters.region}_${filters.ancestry}_${filters.mpp.toFixed(2)}`;
-
-export const getFrequencyLineColor = (filters: FrequencyLineFilters) => {
-  const hash = fnv32a(frequencyLineKey(filters));
-  const hue = hash % 360;
-  const sat = 58 + (hash % 20);
-  const light = 42 + ((hash >>> 8) % 12);
-  return `hsl(${hue}, ${sat}%, ${light}%)`;
-};
+export const getFrequencyLineColor = (lineId: number) =>
+  FREQUENCY_LINE_PALETTE[(Math.max(1, lineId) - 1) % FREQUENCY_LINE_PALETTE.length];
 
 export const getFrequencyLineLabel = (
   lineId: number,
