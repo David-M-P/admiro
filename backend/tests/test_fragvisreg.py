@@ -77,6 +77,60 @@ class FragVisRegFilterTests(unittest.TestCase):
             },
         )
 
+    def test_returns_composition_payload(self) -> None:
+        df = pl.DataFrame(
+            {
+                "index": [0, 1],
+                "pop_combination": [["EAS"], ["EAS", "OCE"]],
+                "total_sequence": [120, 95],
+                "extra": ["x", "y"],
+            }
+        )
+
+        with patch(
+            "admiro_backend.services.filters._parq_read_parquet", return_value=df
+        ) as mock_read:
+            result = filter_frag_vis_reg(
+                plot_type="composition",
+                phase_state="PDAT",
+                region=None,
+                ancestry="Denisova",
+                mpp=80,
+            )
+
+        self.assertEqual(
+            result,
+            {
+                "f": "ct1",
+                "c": ["index", "pop_combination", "total_sequence"],
+                "v": [[0, 1], [["EAS"], ["EAS", "OCE"]], [120, 95]],
+            },
+        )
+        mock_read.assert_called_once_with(
+            "fragments_reg/plot=composition/phase_state=PDAT/anc=Denisova/mpp=80/0.parquet"
+        )
+
+    def test_returns_empty_composition_when_parquet_is_missing(self) -> None:
+        with patch(
+            "admiro_backend.services.filters._parq_read_parquet",
+            side_effect=FileNotFoundError("missing"),
+        ):
+            result = filter_frag_vis_reg(
+                plot_type="composition",
+                phase_state="DATA",
+                region=None,
+                ancestry="All",
+                mpp=50,
+            )
+        self.assertEqual(
+            result,
+            {
+                "f": "ct1",
+                "c": ["index", "pop_combination", "total_sequence"],
+                "v": [[], [], []],
+            },
+        )
+
     def test_raises_when_required_columns_are_missing(self) -> None:
         df = pl.DataFrame(
             {
@@ -102,6 +156,27 @@ class FragVisRegFilterTests(unittest.TestCase):
         self.assertIn("Missing required columns", str(ctx.exception))
         self.assertIn("position", str(ctx.exception))
 
+    def test_raises_when_composition_columns_are_missing(self) -> None:
+        df = pl.DataFrame(
+            {
+                "index": [0],
+                "total_sequence": [10],
+            }
+        )
+
+        with patch("admiro_backend.services.filters._parq_read_parquet", return_value=df):
+            with self.assertRaises(ValueError) as ctx:
+                filter_frag_vis_reg(
+                    plot_type="composition",
+                    phase_state="DATA",
+                    region=None,
+                    ancestry="All",
+                    mpp=50,
+                )
+
+        self.assertIn("Missing required columns", str(ctx.exception))
+        self.assertIn("pop_combination", str(ctx.exception))
+
     def test_raises_on_unsupported_plot_type(self) -> None:
         with self.assertRaises(ValueError):
             filter_frag_vis_reg(
@@ -120,6 +195,16 @@ class FragVisRegFilterTests(unittest.TestCase):
                 region="AMR",
                 ancestry="All",
                 mpp="fifty",
+            )
+
+    def test_raises_on_missing_region_for_freq(self) -> None:
+        with self.assertRaises(ValueError):
+            filter_frag_vis_reg(
+                plot_type="freq",
+                phase_state="DATA",
+                region=None,
+                ancestry="All",
+                mpp=50,
             )
 
 
@@ -148,6 +233,26 @@ class FragVisRegRouteTests(unittest.TestCase):
                     "region": "AMR",
                     "ancestry": "All",
                     "mpp": 50,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), payload)
+
+    def test_fragvisreg_route_returns_composition_payload_without_region(self) -> None:
+        payload = {
+            "f": "ct1",
+            "c": ["index", "pop_combination", "total_sequence"],
+            "v": [[0], [["EAS"]], [100]],
+        }
+        with patch("admiro_backend.api.routes.filter_frag_vis_reg", return_value=payload):
+            response = self.client.post(
+                "/api/fragvisreg-data",
+                json={
+                    "plot_type": "composition",
+                    "phase_state": "PDAT",
+                    "ancestry": "All",
+                    "mpp": 80,
                 },
             )
 
@@ -187,6 +292,20 @@ class FragVisRegRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Unsupported mpp", response.json()["detail"])
+
+    def test_fragvisreg_route_returns_400_on_invalid_composition_input(self) -> None:
+        response = self.client.post(
+            "/api/fragvisreg-data",
+            json={
+                "plot_type": "composition",
+                "phase_state": "DATA",
+                "ancestry": "",
+                "mpp": 80,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Missing required field 'ancestry'", response.json()["detail"])
 
 
 if __name__ == "__main__":

@@ -115,7 +115,8 @@ SUMM_STATS_IND_COLUMNS = [
     "ancSAS",
 ]
 
-FRAG_VIS_REG_COLUMNS = ["chrom", "position", "n_contain", "n_total", "freq"]
+FRAG_VIS_REG_FREQ_COLUMNS = ["chrom", "position", "n_contain", "n_total", "freq"]
+FRAG_VIS_REG_COMPOSITION_COLUMNS = ["index", "pop_combination", "total_sequence"]
 
 
 @lru_cache(maxsize=1)
@@ -214,9 +215,18 @@ def filter_summ_stats_ind(phases, mpp):
     return to_compact_table(final_df)
 
 
+def _is_blank(value):
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
 def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
-    if plot_type != "freq":
-        raise ValueError(f"Unsupported plot_type={plot_type!r}. Expected 'freq'.")
+    if plot_type not in {"freq", "composition"}:
+        raise ValueError(
+            f"Unsupported plot_type={plot_type!r}. Expected 'freq' or 'composition'."
+        )
+
+    if _is_blank(phase_state):
+        raise ValueError("Missing required field 'phase_state'.")
 
     try:
         mpp_int = int(mpp)
@@ -225,18 +235,30 @@ def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
             f"Unsupported mpp={mpp!r}. Expected integer-like numeric value."
         ) from None
 
-    rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+    if plot_type == "freq":
+        if _is_blank(region):
+            raise ValueError("Missing required field 'region' for plot_type='freq'.")
+        if _is_blank(ancestry):
+            raise ValueError("Missing required field 'ancestry' for plot_type='freq'.")
+        rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+        required_cols = FRAG_VIS_REG_FREQ_COLUMNS
+    else:
+        if _is_blank(ancestry):
+            raise ValueError(
+                "Missing required field 'ancestry' for plot_type='composition'."
+            )
+        rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+        required_cols = FRAG_VIS_REG_COMPOSITION_COLUMNS
 
     try:
         df = _parq_read_parquet(rel_path)
     except (ResourceNotFoundError, FileNotFoundError) as e:
         print(f"Missing parquet for frag_vis_reg: {rel_path} ({e})")
-        return empty_compact_table(FRAG_VIS_REG_COLUMNS)
+        return empty_compact_table(required_cols)
     except Exception as e:
         print(f"Error reading parquet for frag_vis_reg: {rel_path} ({e})")
         raise
 
-    required_cols = FRAG_VIS_REG_COLUMNS
     missing = [column for column in required_cols if column not in df.columns]
     if missing:
         raise ValueError(

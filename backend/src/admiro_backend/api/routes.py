@@ -1,5 +1,5 @@
 import asyncio
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -30,7 +30,7 @@ class SumStatIndFilters(BaseModel):
 class FragVisRegFilters(BaseModel):
     plot_type: str
     phase_state: str
-    region: str
+    region: Optional[str] = None
     ancestry: str
     mpp: int
 
