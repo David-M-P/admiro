@@ -67,21 +67,41 @@ const pickFirstValue = (record: Record<string, unknown>, keys: string[]) => {
   return undefined;
 };
 
-const normalizeFrequencyRow = (row: unknown): FrequencyRow | null => {
+type FrequencyChangePointRow = {
+  chromosome: string;
+  position: number;
+  n_with_archaic: number;
+  n_total: number;
+  frequency: number;
+};
+
+type NormalizedFrequencyRow =
+  | { kind: "interval"; row: FrequencyRow }
+  | { kind: "change_point"; row: FrequencyChangePointRow };
+
+const normalizeFrequencyRow = (row: unknown): NormalizedFrequencyRow | null => {
   let chromosomeValue: unknown;
   let startValue: unknown;
   let endValue: unknown;
+  let positionValue: unknown;
   let nWithArchaicValue: unknown;
   let nTotalValue: unknown;
   let frequencyValue: unknown;
 
   if (Array.isArray(row)) {
     chromosomeValue = row[0];
-    startValue = row[1];
-    endValue = row[2];
-    nWithArchaicValue = row[3];
-    nTotalValue = row[4];
-    frequencyValue = row[5];
+    if (row.length >= 6) {
+      startValue = row[1];
+      endValue = row[2];
+      nWithArchaicValue = row[3];
+      nTotalValue = row[4];
+      frequencyValue = row[5];
+    } else {
+      positionValue = row[1];
+      nWithArchaicValue = row[2];
+      nTotalValue = row[3];
+      frequencyValue = row[4];
+    }
   } else if (row && typeof row === "object") {
     const record = row as Record<string, unknown>;
     chromosomeValue = pickFirstValue(record, [
@@ -94,10 +114,12 @@ const normalizeFrequencyRow = (row: unknown): FrequencyRow | null => {
     ]);
     startValue = pickFirstValue(record, ["start", "Start", "column_2", "1"]);
     endValue = pickFirstValue(record, ["end", "End", "column_3", "2"]);
+    positionValue = pickFirstValue(record, ["position", "Position", "column_2", "1"]);
     nWithArchaicValue = pickFirstValue(record, [
       "n_with_archaic",
       "n_archaic",
       "n_individuals_with_archaic",
+      "n_contain",
       "column_4",
       "3",
     ]);
@@ -108,7 +130,15 @@ const normalizeFrequencyRow = (row: unknown): FrequencyRow | null => {
       "column_5",
       "4",
     ]);
-    frequencyValue = pickFirstValue(record, ["frequency", "freq", "Frequency", "column_6", "5"]);
+    frequencyValue = pickFirstValue(record, [
+      "frequency",
+      "freq",
+      "Frequency",
+      "column_6",
+      "5",
+      "column_5",
+      "4",
+    ]);
   } else {
     return null;
   }
@@ -116,26 +146,118 @@ const normalizeFrequencyRow = (row: unknown): FrequencyRow | null => {
   const chromosome = normalizeChromosome(chromosomeValue);
   const start = toFiniteNumber(startValue);
   const end = toFiniteNumber(endValue);
+  const position = toFiniteNumber(positionValue);
   const frequency = toFiniteNumber(frequencyValue);
   const nWithArchaic = toFiniteNumber(nWithArchaicValue) ?? 0;
   const nTotal = toFiniteNumber(nTotalValue) ?? 0;
 
-  if (!chromosome || start === null || end === null || frequency === null || frequency < 0) {
+  if (!chromosome || frequency === null || frequency < 0) {
     return null;
   }
 
-  return {
-    chromosome,
-    start: Math.min(start, end),
-    end: Math.max(start, end),
-    n_with_archaic: nWithArchaic,
-    n_total: nTotal,
-    frequency,
-  };
+  if (start !== null && end !== null) {
+    return {
+      kind: "interval",
+      row: {
+        chromosome,
+        start: Math.min(start, end),
+        end: Math.max(start, end),
+        n_with_archaic: nWithArchaic,
+        n_total: nTotal,
+        frequency,
+      },
+    };
+  }
+
+  if (position !== null) {
+    return {
+      kind: "change_point",
+      row: {
+        chromosome,
+        position,
+        n_with_archaic: nWithArchaic,
+        n_total: nTotal,
+        frequency,
+      },
+    };
+  }
+
+  return null;
 };
 
-const normalizeFrequencyRows = (rawRows: unknown[]) =>
-  rawRows.map(normalizeFrequencyRow).filter((row): row is FrequencyRow => row !== null);
+const toIntervalsFromChangePoints = (rows: FrequencyChangePointRow[]): FrequencyRow[] => {
+  const rowsByChromosome = new Map<string, FrequencyChangePointRow[]>();
+  for (const row of rows) {
+    const existing = rowsByChromosome.get(row.chromosome);
+    if (existing) {
+      existing.push(row);
+    } else {
+      rowsByChromosome.set(row.chromosome, [row]);
+    }
+  }
+
+  const intervals: FrequencyRow[] = [];
+  for (const chromosomeRows of rowsByChromosome.values()) {
+    const sortedRows = chromosomeRows
+      .slice()
+      .sort((a, b) => a.position - b.position);
+    const dedupedRows: FrequencyChangePointRow[] = [];
+
+    for (const point of sortedRows) {
+      const lastPoint = dedupedRows[dedupedRows.length - 1];
+      if (lastPoint && lastPoint.position === point.position) {
+        dedupedRows[dedupedRows.length - 1] = point;
+      } else {
+        dedupedRows.push(point);
+      }
+    }
+
+    for (let index = 0; index < dedupedRows.length - 1; index += 1) {
+      const current = dedupedRows[index];
+      const next = dedupedRows[index + 1];
+      const start = Math.min(current.position, next.position);
+      const end = Math.max(current.position, next.position);
+
+      if (end <= start) continue;
+
+      intervals.push({
+        chromosome: current.chromosome,
+        start,
+        end,
+        n_with_archaic: current.n_with_archaic,
+        n_total: current.n_total,
+        frequency: current.frequency,
+      });
+    }
+  }
+
+  return intervals;
+};
+
+const chromosomeSortKey = (chromosome: string) => (chromosome === "X" ? 23 : Number(chromosome));
+
+const normalizeFrequencyRows = (rawRows: unknown[]) => {
+  const parsedRows = rawRows
+    .map(normalizeFrequencyRow)
+    .filter((row): row is NormalizedFrequencyRow => row !== null);
+
+  const intervalRows = parsedRows
+    .filter((row): row is { kind: "interval"; row: FrequencyRow } => row.kind === "interval")
+    .map((row) => row.row);
+  const changePointRows = parsedRows
+    .filter(
+      (row): row is { kind: "change_point"; row: FrequencyChangePointRow } =>
+        row.kind === "change_point"
+    )
+    .map((row) => row.row);
+
+  return [...intervalRows, ...toIntervalsFromChangePoints(changePointRows)].sort((a, b) => {
+    const chromosomeDiff = chromosomeSortKey(a.chromosome) - chromosomeSortKey(b.chromosome);
+    if (chromosomeDiff !== 0) return chromosomeDiff;
+    if (a.start !== b.start) return a.start - b.start;
+    return a.end - b.end;
+  });
+};
 
 const parseFrequencyResponse = (payload: unknown): unknown[] => {
   if (Array.isArray(payload)) return payload;

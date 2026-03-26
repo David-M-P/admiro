@@ -47,20 +47,37 @@ const getRowsForChromosome = (
     .filter(
       (row) =>
         row.chromosome === chromosome &&
-        row.end >= minBp &&
-        row.start <= maxBp &&
-        row.frequency > 0
+        row.end > minBp &&
+        row.start < maxBp &&
+        row.frequency >= 0
     )
-    .sort((a, b) => a.start - b.start);
+    .sort((a, b) => (a.start !== b.start ? a.start - b.start : a.end - b.end));
 
 const toFrequencyPoints = (rows: FrequencyRow[], minBp: number, maxBp: number) =>
   rows
+    .filter((row) => row.frequency > 0)
     .map((row) => ({
       ...row,
       midpoint: (row.start + row.end) / 2,
     }))
     .filter((row) => row.midpoint >= minBp && row.midpoint <= maxBp)
     .sort((a, b) => a.midpoint - b.midpoint);
+
+const compactSeries = (series: FrequencySeriesPoint[]): FrequencySeriesPoint[] => {
+  const compacted: FrequencySeriesPoint[] = [];
+  for (const point of series) {
+    const previous = compacted[compacted.length - 1];
+    if (
+      previous &&
+      previous.position === point.position &&
+      previous.frequency === point.frequency
+    ) {
+      continue;
+    }
+    compacted.push(point);
+  }
+  return compacted;
+};
 
 const toSeriesWithZeroBaseline = (
   rows: FrequencyRow[],
@@ -71,29 +88,45 @@ const toSeriesWithZeroBaseline = (
 
   const series: FrequencySeriesPoint[] = [{ position: minBp, frequency: 0 }];
   let cursor = minBp;
+  let currentFrequency = 0;
 
   for (const row of rows) {
     const start = Math.max(minBp, row.start);
     const end = Math.min(maxBp, row.end);
-    if (end <= start) continue;
+    const segmentStart = Math.max(start, cursor);
 
-    if (start > cursor) {
-      series.push({ position: start, frequency: 0 });
+    if (end <= start || segmentStart >= end) continue;
+
+    if (segmentStart > cursor) {
+      if (currentFrequency !== 0) {
+        series.push({ position: cursor, frequency: 0 });
+        currentFrequency = 0;
+      }
+      series.push({ position: segmentStart, frequency: 0 });
+      cursor = segmentStart;
     }
 
-    series.push({ position: start, frequency: row.frequency });
+    if (currentFrequency !== row.frequency) {
+      series.push({ position: segmentStart, frequency: row.frequency });
+      currentFrequency = row.frequency;
+    } else if (series[series.length - 1]?.position !== segmentStart) {
+      series.push({ position: segmentStart, frequency: currentFrequency });
+    }
+
     series.push({ position: end, frequency: row.frequency });
-    series.push({ position: end, frequency: 0 });
-    cursor = Math.max(cursor, end);
+    cursor = end;
   }
 
   if (cursor < maxBp) {
+    if (currentFrequency !== 0) {
+      series.push({ position: cursor, frequency: 0 });
+    }
     series.push({ position: maxBp, frequency: 0 });
   } else if (series.length === 1) {
     series.push({ position: maxBp, frequency: 0 });
   }
 
-  return series;
+  return compactSeries(series);
 };
 
 const drawPlot = (
@@ -200,8 +233,8 @@ const drawPlot = (
         seriesPoints: toSeriesWithZeroBaseline(rows, limitStartBp, limitEndBp),
       };
     });
-    const allPoints = pointsByLine.flatMap((entry) => entry.points);
-    const maxFrequency = d3.max(allPoints, (point) => point.frequency) ?? 0;
+    const allSeriesPoints = pointsByLine.flatMap((entry) => entry.seriesPoints);
+    const maxFrequency = d3.max(allSeriesPoints, (point) => point.frequency) ?? 0;
     const yMax = maxFrequency > 0 ? maxFrequency * 1.1 : 1;
 
     const yScale = d3.scaleLinear().domain([0, yMax]).range([yPos + chrHeight, yPos]).nice();
