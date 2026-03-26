@@ -3,7 +3,7 @@ import { chrms_all } from "@/assets/sharedOptions";
 export const FRAG_VIS_REG_PLOT_TYPES = [
   "Frequency",
   "Comparison",
-  "Correlation",
+  "Composition Plot",
 ] as const;
 export type FragVisRegPlotType = (typeof FRAG_VIS_REG_PLOT_TYPES)[number];
 
@@ -30,6 +30,12 @@ export const FREQUENCY_ANCESTRY_OPTIONS = [
   "Non DAVC",
 ] as const;
 export type FrequencyAncestry = (typeof FREQUENCY_ANCESTRY_OPTIONS)[number];
+
+export const COMPOSITION_PHASE_OPTIONS = FREQUENCY_PHASE_OPTIONS;
+export type CompositionPhaseState = FrequencyPhaseState;
+
+export const COMPOSITION_ANCESTRY_OPTIONS = FREQUENCY_ANCESTRY_OPTIONS;
+export type CompositionAncestry = FrequencyAncestry;
 
 export const FREQUENCY_PHASE_TO_PAYLOAD: Record<FrequencyPhaseState, "PDAT" | "DATA"> = {
   Phased: "PDAT",
@@ -63,11 +69,20 @@ export const FREQUENCY_ANCESTRY_TO_PAYLOAD: Record<string, string> = {
 
 export type FrequencyLineStatus = "idle" | "loading" | "loaded" | "error";
 
+export type CompositionStatus = "idle" | "loading" | "loaded" | "error";
+
 export interface FrequencyLineFilters {
   phase_state: FrequencyPhaseState;
   region: FrequencyRegion;
   ancestry: FrequencyAncestry;
   mpp: number;
+}
+
+export interface CompositionFilters {
+  phase_state: CompositionPhaseState;
+  ancestry: CompositionAncestry;
+  mpp: number;
+  barCount: number;
 }
 
 export interface FrequencyRow {
@@ -89,6 +104,20 @@ export interface FrequencyLineState {
   error?: string;
 }
 
+export interface CompositionRow {
+  index: number;
+  pop_combination: string[];
+  total_sequence: number;
+}
+
+export interface CompositionState {
+  filters: CompositionFilters;
+  status: CompositionStatus;
+  rawRows: unknown[];
+  rows: CompositionRow[];
+  error?: string;
+}
+
 export interface FragVisRegState {
   plotType: FragVisRegPlotType;
   chrms: string[];
@@ -96,6 +125,7 @@ export interface FragVisRegState {
   smoothing_window_kbp: number;
   selectedLineId: number;
   lines: FrequencyLineState[];
+  composition: CompositionState;
 }
 
 export const MAX_FREQUENCY_LINES = 10;
@@ -116,6 +146,39 @@ export const DEFAULT_FREQUENCY_LINE_FILTERS: FrequencyLineFilters = {
   mpp: 0.5,
 };
 
+export const DEFAULT_COMPOSITION_FILTERS: CompositionFilters = {
+  phase_state: "Unphased",
+  ancestry: "All",
+  mpp: 0.5,
+  barCount: 50,
+};
+
+export const COMPOSITION_BAR_COUNT_MIN = 2;
+export const COMPOSITION_BAR_COUNT_MAX = 100;
+
+export const COMPOSITION_POPULATION_ORDER = [
+  "AMR",
+  "AYT",
+  "EAS",
+  "EUR",
+  "MID",
+  "OCE",
+  "SAS",
+] as const;
+export type CompositionPopulation = (typeof COMPOSITION_POPULATION_ORDER)[number];
+
+export const COMPOSITION_POPULATION_COLORS: Record<CompositionPopulation, string> = {
+  AMR: "#fc4c3c",
+  MID: "#EC8510",
+  OCE: "#04B3BD",
+  EUR: "#0474bc",
+  EAS: "#34bc2c",
+  AYT: "yellow",
+  SAS: "#804474",
+};
+
+export const COMPOSITION_MULTI_POP_COLOR = "#9e9e9e";
+
 export const DEFAULT_FRAG_VIS_REG_STATE: FragVisRegState = {
   plotType: "Frequency",
   chrms: [...chrms_all.options],
@@ -130,6 +193,12 @@ export const DEFAULT_FRAG_VIS_REG_STATE: FragVisRegState = {
     rows: [],
     visible: false,
   })),
+  composition: {
+    filters: { ...DEFAULT_COMPOSITION_FILTERS },
+    status: "idle",
+    rawRows: [],
+    rows: [],
+  },
 };
 
 const CHROMOSOME_ORDER = [...Array(22).keys()].map((i) => String(i + 1)).concat("X");

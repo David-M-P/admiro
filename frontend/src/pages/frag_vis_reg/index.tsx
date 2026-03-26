@@ -2,8 +2,15 @@ import { chr_range_marks, chrms_all, mpp_marks } from "@/assets/sharedOptions";
 import { PageWithSidebar } from "@/layout/PageWithSidebar";
 import { apiUrl } from "@/lib/api-url";
 import { decodeRowsPayload } from "@/lib/compact-table";
+import CompositionPlot from "@/pages/frag_vis_reg/components/CompositionPlot";
 import FrequencyChromosomePlot from "@/pages/frag_vis_reg/components/FrequencyChromosomePlot";
 import {
+  COMPOSITION_ANCESTRY_OPTIONS,
+  COMPOSITION_BAR_COUNT_MAX,
+  COMPOSITION_BAR_COUNT_MIN,
+  COMPOSITION_PHASE_OPTIONS,
+  CompositionFilters,
+  CompositionRow,
   DEFAULT_FRAG_VIS_REG_STATE,
   FRAG_VIS_REG_PLOT_TYPES,
   FREQUENCY_ANCESTRY_OPTIONS,
@@ -272,6 +279,82 @@ const parseFrequencyResponse = (payload: unknown): unknown[] => {
   }
 };
 
+const normalizePopCombination = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item).trim())
+      .filter((item) => item.length > 0)
+      .map((item) => item.toUpperCase());
+  }
+
+  if (typeof value === "string") {
+    const cleaned = value.replace(/[\[\]"']/g, "");
+    if (!cleaned.trim()) return [];
+    return cleaned
+      .split(/[|,]/g)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .map((item) => item.toUpperCase());
+  }
+
+  return [];
+};
+
+const normalizeCompositionRow = (row: unknown): CompositionRow | null => {
+  let indexValue: unknown;
+  let popCombinationValue: unknown;
+  let totalSequenceValue: unknown;
+
+  if (Array.isArray(row)) {
+    indexValue = row[0];
+    popCombinationValue = row[1];
+    totalSequenceValue = row[2];
+  } else if (row && typeof row === "object") {
+    const record = row as Record<string, unknown>;
+    indexValue = pickFirstValue(record, ["index", "Index", "column_1", "0"]);
+    popCombinationValue = pickFirstValue(record, [
+      "pop_combination",
+      "popCombination",
+      "column_2",
+      "1",
+    ]);
+    totalSequenceValue = pickFirstValue(record, [
+      "total_sequence",
+      "totalSequence",
+      "column_3",
+      "2",
+    ]);
+  } else {
+    return null;
+  }
+
+  const index = toFiniteNumber(indexValue);
+  const totalSequence = toFiniteNumber(totalSequenceValue);
+  if (index === null || totalSequence === null || index < 0 || totalSequence < 0) {
+    return null;
+  }
+
+  return {
+    index: Math.round(index),
+    pop_combination: normalizePopCombination(popCombinationValue),
+    total_sequence: totalSequence,
+  };
+};
+
+const normalizeCompositionRows = (rawRows: unknown[]) =>
+  rawRows
+    .map(normalizeCompositionRow)
+    .filter((row): row is CompositionRow => row !== null)
+    .sort((a, b) => a.index - b.index);
+
+const parseCompositionResponse = (payload: unknown): unknown[] => {
+  try {
+    return decodeRowsPayload(payload);
+  } catch {
+    throw new Error("Unexpected response format from /api/fragvisreg-data.");
+  }
+};
+
 const updateLineById = (
   lines: FrequencyLineState[],
   lineId: number,
@@ -294,6 +377,14 @@ export function FragVisReg() {
     () => state.lines.filter((line) => line.visible),
     [state.lines]
   );
+
+  const compositionVisibleRows = useMemo(() => {
+    const cappedCount = Math.max(
+      COMPOSITION_BAR_COUNT_MIN,
+      Math.min(COMPOSITION_BAR_COUNT_MAX, Math.round(state.composition.filters.barCount))
+    );
+    return state.composition.rows.slice(0, cappedCount);
+  }, [state.composition.filters.barCount, state.composition.rows]);
 
   const applySelectedLine = async () => {
     if (state.plotType !== "Frequency") return;
@@ -368,6 +459,75 @@ export function FragVisReg() {
     }
   };
 
+  const applyCompositionFilters = async () => {
+    if (state.plotType !== "Composition Plot") return;
+    const filters = state.composition.filters;
+
+    setState((prevState) => ({
+      ...prevState,
+      composition: {
+        ...prevState.composition,
+        status: "loading",
+        error: undefined,
+      },
+    }));
+
+    try {
+      const payloadPhaseState = FREQUENCY_PHASE_TO_PAYLOAD[filters.phase_state];
+      const payloadAncestry = FREQUENCY_ANCESTRY_TO_PAYLOAD[filters.ancestry];
+
+      if (!payloadAncestry) {
+        throw new Error("Unsupported ancestry value for backend payload mapping.");
+      }
+
+      const response = await fetch(apiUrl("/api/fragvisreg-data"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          plot_type: "composition",
+          phase_state: payloadPhaseState,
+          ancestry: payloadAncestry,
+          mpp: Math.round(filters.mpp * 100),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch composition data (HTTP ${response.status}).`);
+      }
+
+      const payload = await response.json();
+      const rawRows = parseCompositionResponse(payload);
+      const normalizedRows = normalizeCompositionRows(rawRows);
+
+      setState((prevState) => ({
+        ...prevState,
+        composition: {
+          ...prevState.composition,
+          status: "loaded",
+          rawRows,
+          rows: normalizedRows,
+          error: undefined,
+        },
+      }));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown error while fetching composition data.";
+
+      setState((prevState) => ({
+        ...prevState,
+        composition: {
+          ...prevState.composition,
+          status: "error",
+          error: message,
+        },
+      }));
+    }
+  };
+
   const removeSelectedLine = () => {
     if (!selectedLine) return;
     setState((prevState) => ({
@@ -380,6 +540,19 @@ export function FragVisReg() {
         visible: false,
         error: undefined,
       })),
+    }));
+  };
+
+  const updateCompositionFilters = (patch: Partial<CompositionFilters>) => {
+    setState((prevState) => ({
+      ...prevState,
+      composition: {
+        ...prevState.composition,
+        filters: {
+          ...prevState.composition.filters,
+          ...patch,
+        },
+      },
     }));
   };
 
@@ -400,7 +573,7 @@ export function FragVisReg() {
   const plotTypeIcons: Record<FragVisRegPlotType, JSX.Element> = {
     Frequency: <ShowChartIcon fontSize="small" />,
     Comparison: <CompareArrowsIcon fontSize="small" />,
-    Correlation: <AutoGraphIcon fontSize="small" />,
+    "Composition Plot": <AutoGraphIcon fontSize="small" />,
   };
 
   return (
@@ -699,10 +872,139 @@ export function FragVisReg() {
             </>
           )}
 
-          {state.plotType !== "Frequency" && (
+          {state.plotType === "Composition Plot" && (
+            <>
+              <Grid item xs={12}>
+                <Typography variant="h5">2- Composition Filters:</Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="body2" color="text.secondary">
+                  Status: <strong>{state.composition.status}</strong>
+                  {state.composition.rows.length > 0
+                    ? ` (${state.composition.rows.length} rows fetched)`
+                    : ""}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl sx={{ mb: 1 }} fullWidth>
+                  <InputLabel id="frag-vis-reg-composition-phase-state">Phase state</InputLabel>
+                  <Select
+                    labelId="frag-vis-reg-composition-phase-state"
+                    value={state.composition.filters.phase_state}
+                    label="Phase state"
+                    onChange={(event: SelectChangeEvent<string>) =>
+                      updateCompositionFilters({
+                        phase_state: event.target.value as CompositionFilters["phase_state"],
+                      })
+                    }
+                  >
+                    {COMPOSITION_PHASE_OPTIONS.map((phaseState) => (
+                      <MenuItem key={phaseState} value={phaseState}>
+                        {phaseState}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl sx={{ mb: 1 }} fullWidth>
+                  <InputLabel id="frag-vis-reg-composition-ancestry">Ancestry</InputLabel>
+                  <Select
+                    labelId="frag-vis-reg-composition-ancestry"
+                    value={state.composition.filters.ancestry}
+                    label="Ancestry"
+                    onChange={(event: SelectChangeEvent<string>) =>
+                      updateCompositionFilters({
+                        ancestry: event.target.value as CompositionFilters["ancestry"],
+                      })
+                    }
+                  >
+                    {COMPOSITION_ANCESTRY_OPTIONS.map((ancestry) => (
+                      <MenuItem key={ancestry} value={ancestry}>
+                        {ancestry}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <Box
+                  sx={{
+                    width: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    mb: 1,
+                    mt: 1,
+                  }}
+                >
+                  <Typography className="contrast-text" sx={{ mt: 2, textAlign: "center" }}>
+                    Mean Posterior Prob.
+                  </Typography>
+                  <Slider
+                    value={state.composition.filters.mpp}
+                    onChange={(_event, newValue) =>
+                      updateCompositionFilters({ mpp: newValue as number })
+                    }
+                    aria-labelledby="frag-vis-reg-composition-mpp-slider"
+                    valueLabelDisplay="auto"
+                    step={0.05}
+                    marks={mpp_marks}
+                    min={0.5}
+                    max={0.95}
+                    sx={{ width: "85%" }}
+                  />
+
+                  <Typography className="contrast-text" sx={{ mt: 2, textAlign: "center" }}>
+                    Bars shown
+                  </Typography>
+                  <Slider
+                    value={state.composition.filters.barCount}
+                    onChange={(_event, newValue) =>
+                      updateCompositionFilters({ barCount: newValue as number })
+                    }
+                    aria-labelledby="frag-vis-reg-composition-bar-count-slider"
+                    valueLabelDisplay="auto"
+                    step={1}
+                    min={COMPOSITION_BAR_COUNT_MIN}
+                    max={COMPOSITION_BAR_COUNT_MAX}
+                    marks={[
+                      { value: COMPOSITION_BAR_COUNT_MIN, label: String(COMPOSITION_BAR_COUNT_MIN) },
+                      { value: 50, label: "50" },
+                      { value: COMPOSITION_BAR_COUNT_MAX, label: String(COMPOSITION_BAR_COUNT_MAX) },
+                    ]}
+                    sx={{ width: "85%" }}
+                  />
+                </Box>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  onClick={applyCompositionFilters}
+                  disabled={state.composition.status === "loading"}
+                >
+                  {state.composition.status === "loading" ? "Loading..." : "Apply Filters"}
+                </Button>
+              </Grid>
+
+              {state.composition.error && (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="error">
+                    {state.composition.error}
+                  </Typography>
+                </Grid>
+              )}
+            </>
+          )}
+
+          {state.plotType !== "Frequency" && state.plotType !== "Composition Plot" && (
             <Grid item xs={12}>
               <Typography variant="body2" color="text.secondary">
-                {state.plotType} is not implemented yet. Frequency mode is fully functional.
+                {state.plotType} is not implemented yet. Frequency and Composition Plot modes
+                are fully functional.
               </Typography>
             </Grid>
           )}
@@ -777,9 +1079,8 @@ export function FragVisReg() {
                   <Typography
                     variant="caption"
                     sx={{ lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                    title={`${getFrequencyLineLabel(line.lineId, line.filters)}${
-                      line.status === "loading" ? " (loading)" : ""
-                    }`}
+                    title={`${getFrequencyLineLabel(line.lineId, line.filters)}${line.status === "loading" ? " (loading)" : ""
+                      }`}
                   >
                     {getFrequencyLineLabel(line.lineId, line.filters)}
                     {line.status === "loading" ? " (loading)" : ""}
@@ -787,6 +1088,53 @@ export function FragVisReg() {
                 </Box>
               ))}
             </Box>
+          </Box>
+        </Box>
+      ) : state.plotType === "Composition Plot" ? (
+        <Box
+          sx={{
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            minHeight: 0,
+          }}
+        >
+          <Box className="plot-panel" ref={plotRef}>
+            <CompositionPlot
+              rows={compositionVisibleRows}
+              isSidebarVisible={isSidebarVisible}
+            />
+            <div className="plot-action-bar">
+              <PlotDownloadButton plotRef={plotRef} fileName="frag_vis_reg_composition" />
+            </div>
+          </Box>
+          <Box
+            sx={{
+              mt: 1,
+              border: "1px solid #d9dfec",
+              borderRadius: "8px",
+              bgcolor: "white",
+              px: 1.25,
+              py: 0.9,
+              maxHeight: 112,
+              overflowY: "auto",
+              flexShrink: 0,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ mb: 0.6 }}>
+              Composition Summary
+            </Typography>
+            {state.composition.rows.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Apply filters to draw the composition plot.
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Showing first {compositionVisibleRows.length} bars (sorted by index) out of{" "}
+                {state.composition.rows.length} fetched rows.
+              </Typography>
+            )}
           </Box>
         </Box>
       ) : (
