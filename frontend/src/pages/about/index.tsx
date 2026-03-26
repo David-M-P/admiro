@@ -1,33 +1,42 @@
-import React from "react";
-import { Container, Button, Typography } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { PageWithSidebar } from "@/layout/PageWithSidebar";
+import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
+import { Box, Typography } from "@mui/material";
 
-export const AboutPage: React.FC<NonNullable<unknown>> = () => {
-  const navigate = useNavigate(); // Hook to programmatically navigate
+export function AboutPage() {
+  const { isSidebarVisible } = useSidebar();
 
   return (
-    <Container
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh", // Ensure it takes up the full viewport height
-        textAlign: "center",
-      }}
-      maxWidth="xl"
+    <PageWithSidebar
+      showSidebar={isSidebarVisible}
+      sidebarClassName="side-filter-panel"
+      sidebar={
+        <Box>
+          <Typography variant="h6" gutterBottom>
+            About
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            This section will include project context, data notes, and usage guidance.
+          </Typography>
+        </Box>
+      }
     >
-      <Typography variant="h4" gutterBottom>
-        Page under construction: working hard to get it done! (I promise :)
-      </Typography>
-      <Button
-        variant="contained"
-        color="primary"
-        sx={{ mt: 4 }}
-        onClick={() => navigate("/")} // Redirect to homepage
+      <Box
+        className="page-panel"
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
+          gap: 2,
+        }}
       >
-        Take me home
-      </Button>
-    </Container>
+        <Typography variant="h4">About This App</Typography>
+        <Typography variant="body1" color="text.secondary">
+          Page under construction. The layout now follows the same shell and spacing rules
+          as the data pages.
+        </Typography>
+      </Box>
+    </PageWithSidebar>
   );
-};
+}

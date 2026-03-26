@@ -5,10 +5,10 @@ import {
   color_chrms,
   min_chr_len_marks,
   mpp_marks,
-  variables,
 } from "@/assets/sharedOptions";
 import MultipleSelectChip from "@/shared/MultipleSelect/multipleselect";
 import { GmailTreeViewWithText } from "@/shared/TreeSelect/TreeSelect";
+import { FragVisFilterState } from "@/types/filter-state";
 import {
   Box,
   Button,
@@ -21,102 +21,47 @@ import {
   Typography,
 } from "@mui/material";
 import { SelectChangeEvent } from "@mui/material/Select";
-import React from "react";
-
-interface FilterState {
-  tree_lin: string[];
-  chrms: string[];
-  ancs: string[];
-  mpp: number;
-  chrms_limits: [number, number];
-  min_length: number;
-  color: string;
-}
+import { SetStateAction } from "react";
 
 interface SideFilterProps {
-  filters: FilterState; // Use your FilterState type here
-  setFilters: React.Dispatch<React.SetStateAction<FilterState>>; // Function to set the filters
+  filters: FragVisFilterState;
+  setFilters: (value: SetStateAction<FragVisFilterState>) => void;
   applyFilters: () => Promise<void>;
 }
 
-type MappingKey = keyof typeof variables.mappingToShort;
-
-const SideFilter: React.FC<SideFilterProps> = ({
-  filters,
-  setFilters,
-  applyFilters,
-}) => {
-  const handleSingleChangeMapped = (key: keyof FilterState, value: string) => {
-    // Use the mapping based on the key
-    const mappedValue = variables.mappingToShort[value as MappingKey];
-
-    // Set the original and mapped values in the state
-    setFilters((prevFilters: FilterState) => ({
-      ...prevFilters,
-      [key]: value, // Store the original value for display
-      [`${key}_mapped`]: mappedValue, // Store the mapped value for backend
-    }));
-  };
-
-  const handleSingleChangeUnmapped = (key: keyof FilterState) => {
-    return (
-      event:
-        | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-        | SelectChangeEvent<string>,
-      child?: React.ReactNode
-    ) => {
-      // Check if the event is a SelectChangeEvent
-      const value = "target" in event ? event.target.value : event;
-
-      setFilters((prevFilters: FilterState) => ({
+const SideFilter = ({ filters, setFilters, applyFilters }: SideFilterProps) => {
+  const handleSingleChange = (key: keyof FragVisFilterState) => {
+    return (event: SelectChangeEvent<string>) => {
+      const value = event.target.value;
+      setFilters((prevFilters) => ({
         ...prevFilters,
-        [key]: value, // update the specific key in the state
+        [key]: value,
       }));
     };
   };
-  const handleMultipleChangeUnmapped = (
-    key: keyof FilterState,
+
+  const handleMultipleChange = (
+    key: keyof FragVisFilterState,
     newValues: string[]
   ) => {
-    setFilters((prevFilters: FilterState) => ({
+    setFilters((prevFilters) => ({
       ...prevFilters,
-      [key]: newValues, // update the specific key with the new selected values
+      [key]: newValues,
     }));
   };
-  const handleMultipleChangeMapped = (
-    key: keyof FilterState,
-    newValues: string[],
-    mapping: { [key: string]: string }
+
+  const handleNumberChange = (
+    key: keyof FragVisFilterState,
+    value: number | [number, number]
   ) => {
-    // Map the selected values to their corresponding mapped values
-    const mappedValues = newValues.map((value) => mapping[value]);
-
-    // Set the original and mapped values in the state
-    setFilters((prevFilters: FilterState) => ({
-      ...prevFilters,
-      [key]: newValues, // Store the original selected values
-      [`${key}_mapped`]: mappedValues, // Store the mapped values for backend or processing
-    }));
-  };
-
-  const handleNumberChange = (key: keyof FilterState, value: number) => {
-    setFilters((prevFilters: FilterState) => ({
+    setFilters((prevFilters) => ({
       ...prevFilters,
       [key]: value,
     }));
   };
-  const handleNumberRangeChange = (
-    key: keyof FilterState,
-    newValue: number[]
-  ) => {
-    setFilters((prevFilters: FilterState) => ({
-      ...prevFilters,
-      [key]: newValue, // Update the key (e.g., chrms_limits) with the new range
-    }));
-  };
+
   const handleTreeSelectionChange = (selectedItems: string[]) => {
-    // Update tree_lin with selected tree items
-    setFilters((prevFilters: FilterState) => ({
+    setFilters((prevFilters) => ({
       ...prevFilters,
       tree_lin: selectedItems,
     }));
@@ -130,7 +75,7 @@ const SideFilter: React.FC<SideFilterProps> = ({
       <Grid item xs={12}>
         <GmailTreeViewWithText
           selectedItems={filters.tree_lin}
-          onSelectedItemsChange={handleTreeSelectionChange} // Handle multiselect in tree
+          onSelectedItemsChange={handleTreeSelectionChange}
         />
       </Grid>
       <Grid item xs={12}>
@@ -139,22 +84,14 @@ const SideFilter: React.FC<SideFilterProps> = ({
           options={chrms_all.options}
           label="Chromosomes"
           selectedValues={filters.chrms}
-          onChange={(newValues) =>
-            handleMultipleChangeMapped("chrms", newValues, chrms_all.mapping)
-          }
+          onChange={(newValues) => handleMultipleChange("chrms", newValues)}
         />
         <MultipleSelectChip
           sx={{ mb: 1, mt: 1 }}
           options={ancestries_noAll.options}
           label="Ancestries"
           selectedValues={filters.ancs}
-          onChange={(newValues) =>
-            handleMultipleChangeMapped(
-              "ancs",
-              newValues,
-              ancestries_noAll.mapping
-            )
-          }
+          onChange={(newValues) => handleMultipleChange("ancs", newValues)}
         />
         <Box
           sx={{
@@ -166,17 +103,12 @@ const SideFilter: React.FC<SideFilterProps> = ({
             mt: 1,
           }}
         >
-          <Typography
-            className="contrast-text"
-            sx={{ mt: 2, textAlign: "center" }}
-          >
+          <Typography className="contrast-text" sx={{ mt: 2, textAlign: "center" }}>
             Mean Posterior Prob.
           </Typography>
           <Slider
             value={filters.mpp}
-            onChange={(event, newValue) =>
-              handleNumberChange("mpp", newValue as number)
-            }
+            onChange={(_, newValue) => handleNumberChange("mpp", newValue as number)}
             aria-labelledby="discrete-slider"
             valueLabelDisplay="auto"
             step={0.05}
@@ -197,26 +129,20 @@ const SideFilter: React.FC<SideFilterProps> = ({
             mt: 1,
           }}
         >
-          {/* Text label for Chromosome region */}
-          <Typography
-            className="contrast-text"
-            sx={{ mt: 2, textAlign: "center" }}
-          >
+          <Typography className="contrast-text" sx={{ mt: 2, textAlign: "center" }}>
             Chromosome region (kbp limits)
           </Typography>
-
-          {/* Range slider for controlling chrms_limits */}
           <Slider
-            value={filters.chrms_limits} // Bind the slider to chrms_limits from FilterState
-            onChange={(event, newValue) =>
-              handleNumberRangeChange("chrms_limits", newValue as number[])
+            value={filters.chrms_limits}
+            onChange={(_, newValue) =>
+              handleNumberChange("chrms_limits", newValue as [number, number])
             }
             aria-labelledby="range-slider"
             valueLabelDisplay="auto"
-            step={5000} // Assuming the range will change by 1
-            marks={chr_range_marks} // Marks for the slider
-            min={0} // Minimum value from chrms_limits
-            max={250000} // Maximum value from chrms_limits
+            step={5000}
+            marks={chr_range_marks}
+            min={0}
+            max={250000}
             sx={{ width: "85%" }}
           />
         </Box>
@@ -230,15 +156,12 @@ const SideFilter: React.FC<SideFilterProps> = ({
             mt: 1,
           }}
         >
-          <Typography
-            className="contrast-text"
-            sx={{ mt: 2, textAlign: "center" }}
-          >
+          <Typography className="contrast-text" sx={{ mt: 2, textAlign: "center" }}>
             Minimum fragment length (kbp)
           </Typography>
           <Slider
             value={filters.min_length}
-            onChange={(event, newValue) =>
+            onChange={(_, newValue) =>
               handleNumberChange("min_length", newValue as number)
             }
             aria-labelledby="discrete-slider"
@@ -255,12 +178,12 @@ const SideFilter: React.FC<SideFilterProps> = ({
           <Select
             labelId="color"
             id="color"
-            value={filters.color} // Bind to the plot state
+            value={filters.color}
             label="Color by"
-            onChange={handleSingleChangeUnmapped("color")} // Updated handler
+            onChange={handleSingleChange("color")}
           >
-            {color_chrms.options.map((option, index) => (
-              <MenuItem key={index} value={option}>
+            {color_chrms.options.map((option) => (
+              <MenuItem key={option} value={option}>
                 {option}
               </MenuItem>
             ))}

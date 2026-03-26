@@ -8,7 +8,7 @@ import React, { useEffect, useRef } from "react";
 
 
 type ChromosomeProps = {
-  data: any[];
+  data: DataPoint[];
   isSidebarVisible: boolean;
   lin: string[];
   chrms: string[];
@@ -18,6 +18,9 @@ type ChromosomeProps = {
   min_length: number;
   color: string;
 };
+
+const hasPositiveSize = (width: number, height: number): boolean =>
+  Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
 
 
 
@@ -81,12 +84,6 @@ const createColorScale = (
           .map(String)
       ),
     ];
-
-    const hueFromString = (s: string) => {
-      let h = 0;
-      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-      return h % 360;
-    };
 
     const hash32 = (s: string) => {
       let h = 2166136261; // FNV-1a
@@ -187,22 +184,28 @@ const ChromosomeComponent: React.FC<ChromosomeProps> = ({
   }, [data, chrms, chrms_limits, mpp, min_length, color]);
 
   const handleResize = () => {
-    if (containerRef.current && svgRef.current && data) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      svgRef.current.setAttribute("width", String(width));
-      svgRef.current.setAttribute("height", String(height));
-      plotChromosomes(
-        svgRef.current!,
-        data,
-        lin,
-        chrms,
-        ancs,
-        mpp,
-        chrms_limits,
-        min_length,
-        color
-      );
+    if (!containerRef.current || !svgRef.current || !data) return;
+
+    const { width, height } = containerRef.current.getBoundingClientRect();
+    if (!hasPositiveSize(width, height)) {
+      d3.select(svgRef.current).selectAll("*").remove();
+      d3.select(containerRef.current).selectAll(".tooltip").remove();
+      return;
     }
+
+    svgRef.current.setAttribute("width", String(width));
+    svgRef.current.setAttribute("height", String(height));
+    plotChromosomes(
+      svgRef.current!,
+      data,
+      lin,
+      chrms,
+      ancs,
+      mpp,
+      chrms_limits,
+      min_length,
+      color
+    );
   };
 
   useEffect(() => {
@@ -246,6 +249,8 @@ const plotChromosomes = (
 ) => {
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
+  if (!container) return;
+
   d3.select(container).selectAll(".tooltip").remove();
   const containerMargin = { top: 0, right: 0, bottom: 0, left: -10 };
   const plotMargin = { top: 20, right: -30, bottom: 90, left: 75 };
@@ -255,16 +260,20 @@ const plotChromosomes = (
   const height = container
     ? container.clientHeight - containerMargin.top - containerMargin.bottom
     : 600;
+  if (!hasPositiveSize(width, height)) return;
 
   const plotHeight = height - plotMargin.top - plotMargin.bottom;
 
   const plotWidth = width - plotMargin.left - plotMargin.right;
+  if (!hasPositiveSize(plotWidth, plotHeight)) return;
+  if (!Array.isArray(chrms) || chrms.length === 0) return;
+
   const tooltip = d3.select(container).append("div").attr("class", "tooltip");
 
 
 
 
-  function handleMouseOver(event: any, d: DataPoint) {
+  function handleMouseOver(event: MouseEvent, d: DataPoint) {
     tooltip.transition().duration(200).style("opacity", 0.9);
 
     const [mouseX, mouseY] = d3.pointer(event, container);
@@ -318,12 +327,12 @@ const plotChromosomes = (
       .style("top", mouseY - 28 + "px");
   }
 
-  function handleMouseMove(event: any, d: DataPoint) {
+  function handleMouseMove(event: MouseEvent, _d: DataPoint) {
     const [mouseX, mouseY] = d3.pointer(event, container);
     tooltip.style("left", mouseX + 10 + "px").style("top", mouseY - 28 + "px");
   }
 
-  function handleMouseOut(event: any, d: DataPoint) {
+  function handleMouseOut(_event: MouseEvent, _d: DataPoint) {
     tooltip.transition().duration(500).style("opacity", 0);
   }
 
@@ -359,10 +368,6 @@ const plotChromosomes = (
 
   const { getColor, legendData, discreteOrContinuous } = createColorScale(data, colorKey);
 
-  const maxChromLength = Math.max(
-    ...orderedChrms.map((chrom) => chrlen[chrom] || min_length)
-  );
-
   const xScale = d3
     .scaleLinear()
     .domain([chrms_limits[0] * 1000, chrms_limits[1] * 1000])
@@ -379,35 +384,10 @@ const plotChromosomes = (
   // Adjust loop and partitionHeight
   const partitionHeight = chrHeight / uniqueLinHap.length;
 
-  let colorScaleDiscrete: d3.ScaleOrdinal<string, string> | null = null;
-  let colorScaleContinous: ((value: number) => string) | null = null;
-
-  if (color === "Ancestry") {
-    colorScaleDiscrete = d3
-      .scaleOrdinal<string>(d3.schemeCategory10)
-      .domain(ancs);
-  } else if (color === "Individual") {
-    colorScaleDiscrete = d3
-      .scaleOrdinal<string>(d3.schemeCategory10)
-      .domain(lin);
-  } else if (color === "Mean Posterior Probability") {
-    // Scale maps from 0.5 to 1, and the result of the scale will be a number between 0 and 1.
-    const mppScale = d3
-      .scaleLinear<number>()
-      .domain([0.5, 1]) // Input domain
-      .range([0, 1]); // Range for the interpolator
-
-    // The color scale uses `interpolateBlues` to map the number to a color
-    colorScaleContinous = (value: number) =>
-      d3.interpolateBlues(mppScale(value));
-  }
-
-
-
   // Draw chromosomes
   orderedChrms.forEach((chrom, index) => {
     const chromLength = chrlen[chrom];
-    const scaledChromWidth = xScale(chromLength);
+    const scaledChromWidth = Math.max(0, xScale(chromLength));
 
     // Calculate the y position for the chromosome based on the index
     const yPos = index * (chrHeight + chrPadding);
@@ -453,8 +433,14 @@ const plotChromosomes = (
         );
       });
       individualData.forEach((d) => {
-        const startX = xScale(d.Start);
-        const endX = xScale(d.End);
+        const start = Math.min(d.Start, d.End);
+        const end = Math.max(d.Start, d.End);
+        const startX = xScale(start);
+        const endX = xScale(end);
+        const rectWidth = Math.max(0, endX - startX);
+        if (!Number.isFinite(startX) || !Number.isFinite(endX) || rectWidth <= 0) {
+          return;
+        }
         const indYPos = yPos + linHapIndex * partitionHeight;
 
         const fillColor = getColor(d);
@@ -463,7 +449,7 @@ const plotChromosomes = (
           .append("rect")
           .attr("x", startX)
           .attr("y", indYPos)
-          .attr("width", endX - startX)
+          .attr("width", rectWidth)
           .attr("height", partitionHeight)
           .attr("fill", fillColor)
           .on("mouseover", (event) => handleMouseOver(event, d))

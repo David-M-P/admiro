@@ -1,12 +1,28 @@
-import React from "react";
-import { Container, Button } from "@mui/material";
+import { PageWithSidebar } from "@/layout/PageWithSidebar";
+import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
+import { Box, Typography } from "@mui/material";
 
-export const PlotIndex: React.FC<NonNullable<unknown>> = () => {
+export function PlotIndex() {
+  const { isSidebarVisible } = useSidebar();
+
   return (
-    <Container sx={{ mt: 9 }} maxWidth="xl">
-      <Button fullWidth variant="contained">
-        About
-      </Button>
-    </Container>
+    <PageWithSidebar
+      showSidebar={isSidebarVisible}
+      sidebarClassName="side-filter-panel"
+      sidebar={
+        <Box>
+          <Typography variant="h6" gutterBottom>
+            Plot Index Filters
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            This page can host global plot index controls in a future iteration.
+          </Typography>
+        </Box>
+      }
+    >
+      <Box className="page-panel">
+        <Typography variant="h5">Plot Index</Typography>
+      </Box>
+    </PageWithSidebar>
   );
-};
+}

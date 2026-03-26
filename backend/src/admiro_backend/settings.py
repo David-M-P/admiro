@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     )
     parquet_prefix: str = Field(default="v1", alias="ADMIRO_PARQUET_PREFIX")
     parquet_anon: bool = Field(default=True, alias="ADMIRO_PARQUET_ANON")
+    fragvisreg_max_concurrency: int = Field(
+        default=2, ge=1, alias="ADMIRO_FRAGVISREG_MAX_CONCURRENCY"
+    )
 
     @property
     def cors_origins(self) -> List[str]:

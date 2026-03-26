@@ -1,13 +1,13 @@
-import { NavBar } from "@/shared/NavBar/NavBar";
+import { AppShell } from "@/layout/AppShell";
 import { SidebarProvider } from "@/shared/SideBarContext/SideBarContext";
-import React from "react";
 import { Outlet } from "react-router-dom";
 
-export const Layout: React.FC<NonNullable<unknown>> = () => {
+export function Layout() {
   return (
     <SidebarProvider>
-      <NavBar />
-      <Outlet />
+      <AppShell>
+        <Outlet />
+      </AppShell>
     </SidebarProvider>
   );
-};
+}

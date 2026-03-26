@@ -4,6 +4,119 @@ from azure.core.exceptions import ResourceNotFoundError
 
 
 from admiro_backend.services.data_access import _parq_metadata, _parq_read_parquet
+from admiro_backend.services.serialization import empty_compact_table, to_compact_table
+
+
+FRAG_VIS_IND_SELECT_COLUMNS = [
+    "chrom",
+    "start",
+    "end",
+    "length",
+    "hap",
+    "mean_prob",
+    "called_sequence",
+    "mutationrate",
+    "snps",
+    "admixpopvariants",
+    "linkDAVC",
+    "Vindija",
+    "Chagyrskaya",
+    "Altai",
+    "Denisova",
+    "private_Vindija",
+    "private_Chagyrskaya",
+    "private_Altai",
+    "private_Denisova",
+    "shared_Neanderthal",
+    "shared_archaic",
+    "ancestry",
+    "min_dist_anc",
+    "min_dist_value",
+    "z_test_anc",
+    "z_test_dist",
+    "z_test_pval",
+    "ind",
+    "phase_state",
+    "ind_phase",
+    "sex",
+    "pop",
+    "reg",
+    "dat",
+]
+
+FRAG_VIS_IND_RENAME_MAP = {
+    "chrom": "Chromosome",
+    "start": "Start",
+    "end": "End",
+    "length": "Length",
+    "hap": "Haplotype",
+    "mean_prob": "Mean Post. Prob.",
+    "called_sequence": "Called Seq.",
+    "mutationrate": "Mutation Rate",
+    "snps": "SNPs",
+    "admixpopvariants": "Admixt. Pop. Variants",
+    "linkDAVC": "Link. DAVC",
+    "Vindija": "Vindija",
+    "Chagyrskaya": "Chagyrskaya",
+    "Altai": "Altai",
+    "Denisova": "Denisova",
+    "private_Vindija": "Private Vindija",
+    "private_Chagyrskaya": "Private Chagyrskaya",
+    "private_Altai": "Private Altai",
+    "private_Denisova": "Private Denisova",
+    "shared_Neanderthal": "Shared Neanderthal",
+    "shared_archaic": "Shared Archaic",
+    "ancestry": "Ancestry",
+    "min_dist_anc": "Min. Distance Ancestry",
+    "min_dist_value": "Min. Distance Value",
+    "z_test_anc": "Ancestry Z test",
+    "z_test_dist": "Distance Z test",
+    "z_test_pval": "P-val Z test",
+    "ind": "Individual",
+    "phase_state": "Phase State",
+    "ind_phase": "Individual_Phase",
+    "sex": "Sex",
+    "pop": "Population",
+    "reg": "Region",
+    "dat": "Dataset",
+}
+
+FRAG_VIS_IND_OUTPUT_COLUMNS = [
+    FRAG_VIS_IND_RENAME_MAP.get(column, column) for column in FRAG_VIS_IND_SELECT_COLUMNS
+]
+
+SUMM_STATS_IND_COLUMNS = [
+    "ind",
+    "chrom",
+    "anc",
+    "hap",
+    "len_mea",
+    "len_med",
+    "len_max",
+    "len_min",
+    "nfr",
+    "seq",
+    "phase_state",
+    "mpp",
+    "ind_phase",
+    "lat",
+    "lon",
+    "sex",
+    "reg",
+    "dat",
+    "pop",
+    "ancAFR",
+    "ancAMR",
+    "ancEAS",
+    "ancEUR",
+    "ancMID",
+    "ancOCE",
+    "ancOCE2",
+    "ancSAS",
+]
+
+FRAG_VIS_REG_FREQ_COLUMNS = ["chrom", "position", "n_contain", "n_total", "freq"]
+FRAG_VIS_REG_COMPOSITION_COLUMNS = ["index", "pop_combination", "total_sequence"]
 
 
 @lru_cache(maxsize=1)
@@ -61,95 +174,16 @@ def filter_frag_vis_ind(ind_list):
                     pl.lit(data).alias("dat"),
                 ]
             )
-            .select(
-                [
-                    "chrom",
-                    "start",
-                    "end",
-                    "length",
-                    "hap",
-                    "mean_prob",
-                    "called_sequence",
-                    "mutationrate",
-                    "snps",
-                    "admixpopvariants",
-                    "linkDAVC",
-                    "Vindija",
-                    "Chagyrskaya",
-                    "Altai",
-                    "Denisova",
-                    "private_Vindija",
-                    "private_Chagyrskaya",
-                    "private_Altai",
-                    "private_Denisova",
-                    "shared_Neanderthal",
-                    "shared_archaic",
-                    "ancestry",
-                    "min_dist_anc",
-                    "min_dist_value",
-                    "z_test_anc",
-                    "z_test_dist",
-                    "z_test_pval",
-                    "ind",
-                    "phase_state",
-                    "ind_phase",
-                    "sex",
-                    "pop",
-                    "reg",
-                    "dat",
-                ]
-            )
-            .rename(
-                {
-                    "chrom": "Chromosome",
-                    "start": "Start",
-                    "end": "End",
-                    "length": "Length",
-                    "hap": "Haplotype",
-                    "mean_prob": "Mean Post. Prob.",
-                    "called_sequence": "Called Seq.",
-                    "mutationrate": "Mutation Rate",
-                    "snps": "SNPs",
-                    "admixpopvariants": "Admixt. Pop. Variants",
-                    "linkDAVC": "Link. DAVC",
-                    "Vindija": "Vindija",
-                    "Chagyrskaya": "Chagyrskaya",
-                    "Altai": "Altai",
-                    "Denisova": "Denisova",
-                    "private_Vindija": "Private Vindija",
-                    "private_Chagyrskaya": "Private Chagyrskaya",
-                    "private_Altai": "Private Altai",
-                    "private_Denisova": "Private Denisova",
-                    "shared_Neanderthal": "Shared Neanderthal",
-                    "shared_archaic": "Shared Archaic",
-                    "ancestry": "Ancestry",
-                    "min_dist_anc": "Min. Distance Ancestry",
-                    "min_dist_value": "Min. Distance Value",
-                    "z_test_anc": "Ancestry Z test",
-                    "z_test_dist": "Distance Z test",
-                    "z_test_pval": "P-val Z test",
-                    "ind": "Individual",
-                    "phase_state": "Phase State",
-                    "ind_phase": "Individual_Phase",
-                    "sex": "Sex",
-                    "pop": "Population",
-                    "reg": "Region",
-                    "dat": "Dataset",
-                }
-            )
+            .select(FRAG_VIS_IND_SELECT_COLUMNS)
+            .rename(FRAG_VIS_IND_RENAME_MAP)
         )
 
         df_list.append(sub_df)
-    final_df = pl.concat(df_list)
-    final_df = final_df.with_columns(
-        [
-            pl.when(pl.col(c).is_nan()).then(None).otherwise(pl.col(c)).alias(c)
-            for c, dt in zip(final_df.columns, final_df.dtypes)
-            if dt in (pl.Float32, pl.Float64)
-        ]
-    )
+    if not df_list:
+        return empty_compact_table(FRAG_VIS_IND_OUTPUT_COLUMNS)
 
-    return final_df.to_dicts()
+    final_df = pl.concat(df_list)
+    return to_compact_table(final_df)
 
 
 def filter_summ_stats_ind(phases, mpp):
@@ -171,38 +205,64 @@ def filter_summ_stats_ind(phases, mpp):
                 f"Error reading parquet for phase_state={phase}/mpp={mpp}: {rel_path} ({e})"
             )
             continue
-        df = df.select(
-            [
-                "ind",
-                "chrom",
-                "anc",
-                "hap",
-                "len_mea",
-                "len_med",
-                "len_max",
-                "len_min",
-                "nfr",
-                "seq",
-                "phase_state",
-                "mpp",
-                "ind_phase",
-                "lat",
-                "lon",
-                "sex",
-                "reg",
-                "dat",
-                "pop",
-                "ancAFR",
-                "ancAMR",
-                "ancEAS",
-                "ancEUR",
-                "ancMID",
-                "ancOCE",
-                "ancOCE2",
-                "ancSAS",
-            ]
-        )
+        df = df.select(SUMM_STATS_IND_COLUMNS)
         df_list.append(df)
 
+    if not df_list:
+        return empty_compact_table(SUMM_STATS_IND_COLUMNS)
+
     final_df = pl.concat(df_list)
-    return final_df.to_dict(as_series=False)
+    return to_compact_table(final_df)
+
+
+def _is_blank(value):
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
+    if plot_type not in {"freq", "composition"}:
+        raise ValueError(
+            f"Unsupported plot_type={plot_type!r}. Expected 'freq' or 'composition'."
+        )
+
+    if _is_blank(phase_state):
+        raise ValueError("Missing required field 'phase_state'.")
+
+    try:
+        mpp_int = int(mpp)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Unsupported mpp={mpp!r}. Expected integer-like numeric value."
+        ) from None
+
+    if plot_type == "freq":
+        if _is_blank(region):
+            raise ValueError("Missing required field 'region' for plot_type='freq'.")
+        if _is_blank(ancestry):
+            raise ValueError("Missing required field 'ancestry' for plot_type='freq'.")
+        rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+        required_cols = FRAG_VIS_REG_FREQ_COLUMNS
+    else:
+        if _is_blank(ancestry):
+            raise ValueError(
+                "Missing required field 'ancestry' for plot_type='composition'."
+            )
+        rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+        required_cols = FRAG_VIS_REG_COMPOSITION_COLUMNS
+
+    try:
+        df = _parq_read_parquet(rel_path)
+    except (ResourceNotFoundError, FileNotFoundError) as e:
+        print(f"Missing parquet for frag_vis_reg: {rel_path} ({e})")
+        return empty_compact_table(required_cols)
+    except Exception as e:
+        print(f"Error reading parquet for frag_vis_reg: {rel_path} ({e})")
+        raise
+
+    missing = [column for column in required_cols if column not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing required columns {missing} in {rel_path}. Found columns: {df.columns}"
+        )
+
+    return to_compact_table(df.select(required_cols))
