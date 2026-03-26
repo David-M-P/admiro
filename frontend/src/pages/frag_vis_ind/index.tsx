@@ -4,6 +4,7 @@ import ChromosomeComponent from "@/pages/frag_vis_ind/components/ChromosomeCompo
 import SideFilter from "@/pages/frag_vis_ind/components/SideFilter";
 import { DataPoint } from "@/pages/frag_vis_ind/static/fviStatic";
 import { apiUrl } from "@/lib/api-url";
+import { decodeObjectRowsPayload } from "@/lib/compact-table";
 import PlotDownloadButton from "@/shared/PlotDownloadButton/PlotDownloadButton";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
 import { FragVisFilterState } from "@/types/filter-state";
@@ -53,7 +54,7 @@ export function FragVisInd() {
       }
 
       const fetchedData = await response.json();
-      setData(fetchedData);
+      setData(decodeObjectRowsPayload<DataPoint>(fetchedData));
       setIsFiltersApplied(true);
     } catch (error) {
       console.error("Error:", error);

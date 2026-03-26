@@ -40,29 +40,17 @@ class FragVisRegFilterTests(unittest.TestCase):
 
         self.assertEqual(
             result,
-            [
-                {
-                    "chrom": "1",
-                    "position": 100,
-                    "n_contain": 1,
-                    "n_total": 10,
-                    "freq": 0.1,
-                },
-                {
-                    "chrom": "1",
-                    "position": 200,
-                    "n_contain": 0,
-                    "n_total": 10,
-                    "freq": 0.0,
-                },
-                {
-                    "chrom": "2",
-                    "position": 50,
-                    "n_contain": 2,
-                    "n_total": 20,
-                    "freq": 0.1,
-                },
-            ],
+            {
+                "f": "ct1",
+                "c": ["chrom", "position", "n_contain", "n_total", "freq"],
+                "v": [
+                    ["1", "1", "2"],
+                    [100, 200, 50],
+                    [1, 0, 2],
+                    [10, 10, 20],
+                    [0.1, 0.0, 0.1],
+                ],
+            },
         )
         mock_read.assert_called_once_with(
             "fragments_reg/plot=freq/phase_state=DATA/reg=AMR/anc=All/mpp=50/0.parquet"
@@ -80,7 +68,14 @@ class FragVisRegFilterTests(unittest.TestCase):
                 ancestry="All",
                 mpp=50,
             )
-        self.assertEqual(result, [])
+        self.assertEqual(
+            result,
+            {
+                "f": "ct1",
+                "c": ["chrom", "position", "n_contain", "n_total", "freq"],
+                "v": [[], [], [], [], []],
+            },
+        )
 
     def test_raises_when_required_columns_are_missing(self) -> None:
         df = pl.DataFrame(
@@ -139,15 +134,11 @@ class FragVisRegRouteTests(unittest.TestCase):
         get_settings.cache_clear()
 
     def test_fragvisreg_route_returns_raw_payload(self) -> None:
-        payload = [
-            {
-                "chrom": "1",
-                "position": 100,
-                "n_contain": 1,
-                "n_total": 10,
-                "freq": 0.1,
-            }
-        ]
+        payload = {
+            "f": "ct1",
+            "c": ["chrom", "position", "n_contain", "n_total", "freq"],
+            "v": [["1"], [100], [1], [10], [0.1]],
+        }
         with patch("admiro_backend.api.routes.filter_frag_vis_reg", return_value=payload):
             response = self.client.post(
                 "/api/fragvisreg-data",

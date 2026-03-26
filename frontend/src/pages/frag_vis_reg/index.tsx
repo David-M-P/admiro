@@ -1,6 +1,7 @@
 import { chr_range_marks, chrms_all, mpp_marks } from "@/assets/sharedOptions";
 import { PageWithSidebar } from "@/layout/PageWithSidebar";
 import { apiUrl } from "@/lib/api-url";
+import { decodeRowsPayload } from "@/lib/compact-table";
 import FrequencyChromosomePlot from "@/pages/frag_vis_reg/components/FrequencyChromosomePlot";
 import {
   DEFAULT_FRAG_VIS_REG_STATE,
@@ -264,12 +265,11 @@ const normalizeFrequencyRows = (rawRows: unknown[]) => {
 };
 
 const parseFrequencyResponse = (payload: unknown): unknown[] => {
-  if (Array.isArray(payload)) return payload;
-  if (payload && typeof payload === "object") {
-    const maybeRows = (payload as { rows?: unknown }).rows;
-    if (Array.isArray(maybeRows)) return maybeRows;
+  try {
+    return decodeRowsPayload(payload);
+  } catch {
+    throw new Error("Unexpected response format from /api/fragvisreg-data.");
   }
-  throw new Error("Unexpected response format from /api/fragvisreg-data.");
 };
 
 const updateLineById = (

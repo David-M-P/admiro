@@ -11,6 +11,7 @@ import { createSummStatGridColumns } from "@/pages/sum_stats_ind/config/gridColu
 import { mapping } from "@/pages/sum_stats_ind/static/mapping";
 import { mappingToLong } from "@/pages/sum_stats_ind/static/ssiStatic";
 import { apiUrl } from "@/lib/api-url";
+import { decodeObjectRowsPayload } from "@/lib/compact-table";
 import PlotDownloadButton from "@/shared/PlotDownloadButton/PlotDownloadButton";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
 import { SummStatFilterState } from "@/types/filter-state";
@@ -71,19 +72,6 @@ export function SummStatInd() {
 
   const mapArray = (vals: string[], map: Record<string, string>) =>
     vals.map((v) => map[v] ?? v);
-  function columnsToRows(cols: Record<string, unknown>) {
-    // only use array-valued keys
-    const keys = Object.keys(cols).filter((k) => Array.isArray(cols[k]));
-    const n = keys.length ? (cols[keys[0]] as unknown[]).length : 0;
-
-    return Array.from({ length: n }, (_, i) => {
-      const row: Record<string, unknown> = {};
-      for (const k of keys) {
-        row[k] = (cols[k] as unknown[])[i];
-      }
-      return row;
-    });
-  }
   const [data, setData] = useState<DataPoint[]>([]); // For holding the fetched data
   const [isFiltersApplied, setIsFiltersApplied] = useState(false); // To check if filters are applied
   const [loading, setLoading] = useState(false); // To handle loading state
@@ -124,10 +112,8 @@ export function SummStatInd() {
       const fetchedData = await response.json();
       const tJson1 = performance.now();
 
-      // ✅ response stays short. handle both row-array and columnar-object formats
-      const rows = Array.isArray(fetchedData)
-        ? fetchedData
-        : columnsToRows(fetchedData);
+      // ✅ supports compact table (`ct1`) and legacy payloads
+      const rows = decodeObjectRowsPayload<DataPoint>(fetchedData);
 
       const t1 = performance.now();
 
@@ -136,7 +122,7 @@ export function SummStatInd() {
       );
 
       // ✅ store short-keyed rows
-      setData(rows as DataPoint[]); // or better: define a SummStatsRow type
+      setData(rows);
       setIsFiltersApplied(true);
     } catch (error) {
       console.error("Error:", error);
