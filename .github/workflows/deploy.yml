@@ -39,14 +39,17 @@ jobs:
 
           if [ "$BR" = "dev" ]; then
             echo "BACK_APP=admiro-backend-dev-weu" >> $GITHUB_ENV
+            echo "ADMIRO_ENV=dev" >> $GITHUB_ENV
             echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_DEV }}" >> $GITHUB_ENV
             echo "CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_DEV }}" >> $GITHUB_ENV
           elif [ "$BR" = "staging" ]; then
             echo "BACK_APP=admiro-backend-staging-weu" >> $GITHUB_ENV
+            echo "ADMIRO_ENV=staging" >> $GITHUB_ENV
             echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_STAGING }}" >> $GITHUB_ENV
             echo "CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_STAGING }}" >> $GITHUB_ENV
           else
             echo "BACK_APP=admiro-backend-prod-weu" >> $GITHUB_ENV
+            echo "ADMIRO_ENV=prod" >> $GITHUB_ENV
             echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_PROD }}" >> $GITHUB_ENV
             echo "CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_PROD }}" >> $GITHUB_ENV
           fi
@@ -121,7 +124,7 @@ jobs:
         run: |
           az containerapp update -g "$RG" -n "$BACK_APP" \
             --image "$ACR_SERVER/admiro-backend:${TAG}" \
-            --set-env-vars ADMIRO_CORS_ORIGINS="$CORS_ORIGINS"
+            --set-env-vars ADMIRO_ENV="$ADMIRO_ENV" ADMIRO_CORS_ORIGINS="$CORS_ORIGINS"
 
       - name: Disable backend auth gate
         shell: bash
