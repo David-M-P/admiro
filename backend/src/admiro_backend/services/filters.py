@@ -221,11 +221,11 @@ def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
     try:
         mpp_int = int(mpp)
     except (TypeError, ValueError):
-        raise ValueError(f"Unsupported mpp={mpp!r}. Expected integer-like numeric value.") from None
+        raise ValueError(
+            f"Unsupported mpp={mpp!r}. Expected integer-like numeric value."
+        ) from None
 
-    rel_path = (
-        f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
-    )
+    rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
 
     try:
         df = _parq_read_parquet(rel_path)
@@ -236,28 +236,11 @@ def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
         print(f"Error reading parquet for frag_vis_reg: {rel_path} ({e})")
         raise
 
-    required_cols = ["chrom", "start", "end", "n_contain", "n_total", "freq"]
+    required_cols = ["chrom", "position", "n_contain", "n_total", "freq"]
     missing = [column for column in required_cols if column not in df.columns]
     if missing:
         raise ValueError(
             f"Missing required columns {missing} in {rel_path}. Found columns: {df.columns}"
         )
 
-    # Frequency plots are sparse; drop zero/negative bins to reduce payload size.
-    # The frontend reconstructs omitted intervals as baseline frequency 0.
-    df = df.filter(pl.col("freq") > 0)
-    if df.is_empty():
-        return []
-
-    df = df.select(required_cols).rename(
-        {
-            "chrom": "chromosome",
-            "start": "start",
-            "end": "end",
-            "n_contain": "n_with_archaic",
-            "n_total": "n_total",
-            "freq": "frequency",
-        }
-    )
-
-    return df.to_dicts()
+    return df.select(required_cols).to_dicts()
