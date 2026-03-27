@@ -49,7 +49,7 @@ jobs:
                 echo "ADMIRO_PARQUET_STORAGE_ACCOUNT=${{ secrets.ADMIRO_PARQUET_STORAGE_ACCOUNT }}"
                 echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
                 echo "ADMIRO_PARQUET_PREFIX=v1"
-                echo "ADMIRO_PARQUET_ANON=true"
+                echo "ADMIRO_PARQUET_ANON=false"
               } >> "$GITHUB_ENV"
               ;;
             staging)
@@ -61,7 +61,7 @@ jobs:
                 echo "ADMIRO_PARQUET_STORAGE_ACCOUNT=${{ secrets.ADMIRO_PARQUET_STORAGE_ACCOUNT }}"
                 echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
                 echo "ADMIRO_PARQUET_PREFIX=v1"
-                echo "ADMIRO_PARQUET_ANON=true"
+                echo "ADMIRO_PARQUET_ANON=false"
               } >> "$GITHUB_ENV"
               ;;
             main)
@@ -73,7 +73,7 @@ jobs:
                 echo "ADMIRO_PARQUET_STORAGE_ACCOUNT=${{ secrets.ADMIRO_PARQUET_STORAGE_ACCOUNT }}"
                 echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
                 echo "ADMIRO_PARQUET_PREFIX=v1"
-                echo "ADMIRO_PARQUET_ANON=true"
+                echo "ADMIRO_PARQUET_ANON=false"
               } >> "$GITHUB_ENV"
               ;;
             *)
