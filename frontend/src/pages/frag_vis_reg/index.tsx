@@ -2,6 +2,12 @@ import { chr_range_marks, chrms_all, mpp_marks } from "@/assets/sharedOptions";
 import { PageWithSidebar } from "@/layout/PageWithSidebar";
 import { apiUrl } from "@/lib/api-url";
 import { decodeRowsPayload } from "@/lib/compact-table";
+import {
+  buildSessionCacheKey,
+  formatTransferMetrics,
+  getFetchTransferMetrics,
+  setSessionCacheValue,
+} from "@/lib/request-observability";
 import CompositionPlot from "@/pages/frag_vis_reg/components/CompositionPlot";
 import FrequencyChromosomePlot from "@/pages/frag_vis_reg/components/FrequencyChromosomePlot";
 import {
@@ -51,6 +57,23 @@ import {
 } from "@mui/material";
 import { SelectChangeEvent } from "@mui/material/Select";
 import { useMemo, useRef, useState } from "react";
+
+const FRAG_VIS_REG_ENDPOINT = "/api/fragvisreg-data";
+const FRAG_VIS_REG_FREQUENCY_SESSION_CACHE_MAX_ENTRIES = 80;
+const FRAG_VIS_REG_COMPOSITION_SESSION_CACHE_MAX_ENTRIES = 40;
+
+type FrequencySessionCacheEntry = {
+  rawRows: unknown[];
+  normalizedRows: FrequencyRow[];
+};
+
+type CompositionSessionCacheEntry = {
+  rawRows: unknown[];
+  normalizedRows: CompositionRow[];
+};
+
+const FRAG_VIS_REG_FREQUENCY_SESSION_CACHE = new Map<string, FrequencySessionCacheEntry>();
+const FRAG_VIS_REG_COMPOSITION_SESSION_CACHE = new Map<string, CompositionSessionCacheEntry>();
 
 const toFiniteNumber = (value: unknown): number | null => {
   const numeric = Number(value);
@@ -390,6 +413,7 @@ export function FragVisReg() {
     if (state.plotType !== "Frequency") return;
     const lineToFetch = selectedLine;
     if (!lineToFetch) return;
+    const startedAt = performance.now();
 
     setState((prevState) => ({
       ...prevState,
@@ -409,27 +433,75 @@ export function FragVisReg() {
         throw new Error("Unsupported filter values for backend payload mapping.");
       }
 
-      const response = await fetch(apiUrl("/api/fragvisreg-data"), {
+      const requestPayload = {
+        plot_type: "freq",
+        phase_state: payloadPhaseState,
+        region: payloadRegion,
+        ancestry: payloadAncestry,
+        mpp: Math.round(lineToFetch.filters.mpp * 100),
+      } as const;
+      const cacheKey = buildSessionCacheKey(FRAG_VIS_REG_ENDPOINT, requestPayload);
+      const cachedEntry = FRAG_VIS_REG_FREQUENCY_SESSION_CACHE.get(cacheKey);
+
+      if (cachedEntry) {
+        FRAG_VIS_REG_FREQUENCY_SESSION_CACHE.delete(cacheKey);
+        FRAG_VIS_REG_FREQUENCY_SESSION_CACHE.set(cacheKey, cachedEntry);
+        const finishedAt = performance.now();
+        console.log(
+          `frag-vis-reg freq fetch: 0.0 ms | json: 0.0 ms | total: ${(finishedAt - startedAt).toFixed(1)} ms | cache: HIT | transfer: skipped`
+        );
+        setState((prevState) => ({
+          ...prevState,
+          lines: updateLineById(prevState.lines, lineToFetch.lineId, (line) => ({
+            ...line,
+            status: "loaded",
+            rawRows: cachedEntry.rawRows,
+            rows: cachedEntry.normalizedRows,
+            visible: true,
+            error: undefined,
+          })),
+        }));
+        return;
+      }
+
+      const requestUrl = apiUrl(FRAG_VIS_REG_ENDPOINT);
+      const fetchStartedAt = performance.now();
+      const response = await fetch(requestUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          plot_type: "freq",
-          phase_state: payloadPhaseState,
-          region: payloadRegion,
-          ancestry: payloadAncestry,
-          mpp: Math.round(lineToFetch.filters.mpp * 100),
-        }),
+        body: JSON.stringify(requestPayload),
       });
+      const fetchFinishedAt = performance.now();
 
       if (!response.ok) {
         throw new Error(`Failed to fetch frequency data (HTTP ${response.status}).`);
       }
 
+      const jsonStartedAt = performance.now();
       const payload = await response.json();
+      const jsonFinishedAt = performance.now();
       const rawRows = parseFrequencyResponse(payload);
       const normalizedRows = normalizeFrequencyRows(rawRows);
+      const finishedAt = performance.now();
+      const transferMetrics = getFetchTransferMetrics(
+        response.url || requestUrl,
+        fetchStartedAt,
+        fetchFinishedAt
+      );
+
+      console.log(
+        `frag-vis-reg freq fetch: ${(fetchFinishedAt - fetchStartedAt).toFixed(1)} ms | json: ${(jsonFinishedAt - jsonStartedAt).toFixed(1)} ms | total: ${(finishedAt - startedAt).toFixed(1)} ms | cache: MISS | ${formatTransferMetrics(
+          transferMetrics
+        )}`
+      );
+      setSessionCacheValue(
+        FRAG_VIS_REG_FREQUENCY_SESSION_CACHE,
+        cacheKey,
+        { rawRows, normalizedRows },
+        FRAG_VIS_REG_FREQUENCY_SESSION_CACHE_MAX_ENTRIES
+      );
 
       setState((prevState) => ({
         ...prevState,
@@ -462,6 +534,7 @@ export function FragVisReg() {
   const applyCompositionFilters = async () => {
     if (state.plotType !== "Composition Plot") return;
     const filters = state.composition.filters;
+    const startedAt = performance.now();
 
     setState((prevState) => ({
       ...prevState,
@@ -480,26 +553,72 @@ export function FragVisReg() {
         throw new Error("Unsupported ancestry value for backend payload mapping.");
       }
 
-      const response = await fetch(apiUrl("/api/fragvisreg-data"), {
+      const requestPayload = {
+        plot_type: "composition",
+        phase_state: payloadPhaseState,
+        ancestry: payloadAncestry,
+        mpp: Math.round(filters.mpp * 100),
+      } as const;
+      const cacheKey = buildSessionCacheKey(FRAG_VIS_REG_ENDPOINT, requestPayload);
+      const cachedEntry = FRAG_VIS_REG_COMPOSITION_SESSION_CACHE.get(cacheKey);
+
+      if (cachedEntry) {
+        FRAG_VIS_REG_COMPOSITION_SESSION_CACHE.delete(cacheKey);
+        FRAG_VIS_REG_COMPOSITION_SESSION_CACHE.set(cacheKey, cachedEntry);
+        const finishedAt = performance.now();
+        console.log(
+          `frag-vis-reg composition fetch: 0.0 ms | json: 0.0 ms | total: ${(finishedAt - startedAt).toFixed(1)} ms | cache: HIT | transfer: skipped`
+        );
+        setState((prevState) => ({
+          ...prevState,
+          composition: {
+            ...prevState.composition,
+            status: "loaded",
+            rawRows: cachedEntry.rawRows,
+            rows: cachedEntry.normalizedRows,
+            error: undefined,
+          },
+        }));
+        return;
+      }
+
+      const requestUrl = apiUrl(FRAG_VIS_REG_ENDPOINT);
+      const fetchStartedAt = performance.now();
+      const response = await fetch(requestUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          plot_type: "composition",
-          phase_state: payloadPhaseState,
-          ancestry: payloadAncestry,
-          mpp: Math.round(filters.mpp * 100),
-        }),
+        body: JSON.stringify(requestPayload),
       });
+      const fetchFinishedAt = performance.now();
 
       if (!response.ok) {
         throw new Error(`Failed to fetch composition data (HTTP ${response.status}).`);
       }
 
+      const jsonStartedAt = performance.now();
       const payload = await response.json();
+      const jsonFinishedAt = performance.now();
       const rawRows = parseCompositionResponse(payload);
       const normalizedRows = normalizeCompositionRows(rawRows);
+      const finishedAt = performance.now();
+      const transferMetrics = getFetchTransferMetrics(
+        response.url || requestUrl,
+        fetchStartedAt,
+        fetchFinishedAt
+      );
+      console.log(
+        `frag-vis-reg composition fetch: ${(fetchFinishedAt - fetchStartedAt).toFixed(1)} ms | json: ${(jsonFinishedAt - jsonStartedAt).toFixed(1)} ms | total: ${(finishedAt - startedAt).toFixed(1)} ms | cache: MISS | ${formatTransferMetrics(
+          transferMetrics
+        )}`
+      );
+      setSessionCacheValue(
+        FRAG_VIS_REG_COMPOSITION_SESSION_CACHE,
+        cacheKey,
+        { rawRows, normalizedRows },
+        FRAG_VIS_REG_COMPOSITION_SESSION_CACHE_MAX_ENTRIES
+      );
 
       setState((prevState) => ({
         ...prevState,

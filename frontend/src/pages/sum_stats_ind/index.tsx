@@ -12,6 +12,12 @@ import { mapping } from "@/pages/sum_stats_ind/static/mapping";
 import { mappingToLong } from "@/pages/sum_stats_ind/static/ssiStatic";
 import { apiUrl } from "@/lib/api-url";
 import { decodeObjectRowsPayload } from "@/lib/compact-table";
+import {
+  buildSessionCacheKey,
+  formatTransferMetrics,
+  getFetchTransferMetrics,
+  setSessionCacheValue,
+} from "@/lib/request-observability";
 import PlotDownloadButton from "@/shared/PlotDownloadButton/PlotDownloadButton";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
 import { SummStatFilterState } from "@/types/filter-state";
@@ -45,6 +51,10 @@ import {
 
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+const SUMM_STATS_ENDPOINT = "/api/summ-stats-ind-data";
+const SUMM_STATS_SESSION_CACHE_MAX_ENTRIES = 40;
+const SUMM_STATS_SESSION_CACHE = new Map<string, DataPoint[]>();
 
 const collectLeafColumns = (defs: (ColDef | ColGroupDef)[]): ColDef[] => {
   const result: ColDef[] = [];
@@ -98,8 +108,24 @@ export function SummStatInd() {
         // chrms_1: mapArray(filters.chrms_1, mapping.values.chrom.toShort),
       };
 
+      const cacheKey = buildSessionCacheKey(SUMM_STATS_ENDPOINT, payload);
+      const cachedRows = SUMM_STATS_SESSION_CACHE.get(cacheKey);
+      if (cachedRows) {
+        // Touch entry for simple LRU behavior.
+        SUMM_STATS_SESSION_CACHE.delete(cacheKey);
+        SUMM_STATS_SESSION_CACHE.set(cacheKey, cachedRows);
+        const t1 = performance.now();
+        console.log(
+          `summ-stats fetch: 0.0 ms | json: 0.0 ms | total: ${(t1 - t0).toFixed(1)} ms | cache: HIT | transfer: skipped`
+        );
+        setData(cachedRows);
+        setIsFiltersApplied(true);
+        return;
+      }
+
+      const requestUrl = apiUrl(SUMM_STATS_ENDPOINT);
       const tFetch0 = performance.now();
-      const response = await fetch(apiUrl("/api/summ-stats-ind-data"), {
+      const response = await fetch(requestUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -116,9 +142,19 @@ export function SummStatInd() {
       const rows = decodeObjectRowsPayload<DataPoint>(fetchedData);
 
       const t1 = performance.now();
+      const transferMetrics = getFetchTransferMetrics(response.url || requestUrl, tFetch0, tFetch1);
 
       console.log(
-        `summ-stats fetch: ${(tFetch1 - tFetch0).toFixed(1)} ms | json: ${(tJson1 - tJson0).toFixed(1)} ms | total: ${(t1 - t0).toFixed(1)} ms`
+        `summ-stats fetch: ${(tFetch1 - tFetch0).toFixed(1)} ms | json: ${(tJson1 - tJson0).toFixed(1)} ms | total: ${(t1 - t0).toFixed(1)} ms | cache: MISS | ${formatTransferMetrics(
+          transferMetrics
+        )}`
+      );
+
+      setSessionCacheValue(
+        SUMM_STATS_SESSION_CACHE,
+        cacheKey,
+        rows,
+        SUMM_STATS_SESSION_CACHE_MAX_ENTRIES
       );
 
       // ✅ store short-keyed rows

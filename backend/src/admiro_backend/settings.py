@@ -27,6 +27,23 @@ class Settings(BaseSettings):
     fragvisreg_max_concurrency: int = Field(
         default=2, ge=1, alias="ADMIRO_FRAGVISREG_MAX_CONCURRENCY"
     )
+    response_cache_enabled: bool = Field(
+        default=True, alias="ADMIRO_RESPONSE_CACHE_ENABLED"
+    )
+    response_cache_ttl_seconds: int = Field(
+        default=600, ge=1, alias="ADMIRO_RESPONSE_CACHE_TTL_SECONDS"
+    )
+    response_cache_max_entries_summ_stats: int = Field(
+        default=16, ge=1, alias="ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS"
+    )
+    response_cache_max_entries_fragvisreg: int = Field(
+        default=8, ge=1, alias="ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG"
+    )
+    server_timing_enabled: bool = Field(
+        default=True, alias="ADMIRO_SERVER_TIMING_ENABLED"
+    )
+    gzip_minimum_size: int = Field(default=1000, ge=0, alias="ADMIRO_GZIP_MINIMUM_SIZE")
+    gzip_compresslevel: int = Field(default=5, ge=1, le=9, alias="ADMIRO_GZIP_COMPRESSLEVEL")
 
     @property
     def cors_origins(self) -> List[str]:

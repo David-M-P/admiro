@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from admiro_backend.main import create_app
+from admiro_backend.api.routes import _fragvisreg_cache
 from admiro_backend.services.filters import filter_frag_vis_reg
 from admiro_backend.settings import get_settings
 
@@ -212,6 +213,7 @@ class FragVisRegRouteTests(unittest.TestCase):
     def setUp(self) -> None:
         os.environ["ADMIRO_CORS_ORIGINS"] = "http://localhost:8080"
         get_settings.cache_clear()
+        _fragvisreg_cache.clear()
         self.client = TestClient(create_app())
 
     def tearDown(self) -> None:
@@ -238,6 +240,10 @@ class FragVisRegRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), payload)
+        self.assertEqual(response.headers.get("x-admiro-cache"), "MISS")
+        self.assertIn("total;dur=", response.headers.get("server-timing", ""))
+        self.assertIn("compute;dur=", response.headers.get("server-timing", ""))
+        self.assertIn("serialize;dur=", response.headers.get("server-timing", ""))
 
     def test_fragvisreg_route_returns_composition_payload_without_region(self) -> None:
         payload = {
@@ -306,6 +312,30 @@ class FragVisRegRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Missing required field 'ancestry'", response.json()["detail"])
+
+    def test_fragvisreg_route_uses_cache_for_identical_payload(self) -> None:
+        payload = {
+            "f": "ct1",
+            "c": ["chrom", "position", "n_contain", "n_total", "freq"],
+            "v": [["1"], [100], [1], [10], [0.1]],
+        }
+        request_payload = {
+            "plot_type": "freq",
+            "phase_state": "DATA",
+            "region": "AMR",
+            "ancestry": "All",
+            "mpp": 50,
+        }
+
+        with patch("admiro_backend.api.routes.filter_frag_vis_reg", return_value=payload) as mock_filter:
+            first = self.client.post("/api/fragvisreg-data", json=request_payload)
+            second = self.client.post("/api/fragvisreg-data", json=request_payload)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.headers.get("x-admiro-cache"), "MISS")
+        self.assertEqual(second.headers.get("x-admiro-cache"), "HIT")
+        self.assertEqual(mock_filter.call_count, 1)
 
 
 if __name__ == "__main__":
