@@ -30,45 +30,88 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Map branch -> apps
+      - name: Map branch to deployment config
         shell: bash
         run: |
+          set -euo pipefail
+
           BR="${GITHUB_REF_NAME}"
-          echo "BR=$BR" >> $GITHUB_ENV
-          echo "TAG=${BR}-${GITHUB_SHA}" >> $GITHUB_ENV
+          echo "BR=$BR" >> "$GITHUB_ENV"
+          echo "TAG=${BR}-${GITHUB_SHA}" >> "$GITHUB_ENV"
 
-          if [ "$BR" = "dev" ]; then
-            echo "BACK_APP=admiro-backend-dev-weu" >> $GITHUB_ENV
-            echo "ADMIRO_ENV=dev" >> $GITHUB_ENV
-            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_DEV }}" >> $GITHUB_ENV
-            echo "CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_DEV }}" >> $GITHUB_ENV
-          elif [ "$BR" = "staging" ]; then
-            echo "BACK_APP=admiro-backend-staging-weu" >> $GITHUB_ENV
-            echo "ADMIRO_ENV=staging" >> $GITHUB_ENV
-            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_STAGING }}" >> $GITHUB_ENV
-            echo "CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_STAGING }}" >> $GITHUB_ENV
-          else
-            echo "BACK_APP=admiro-backend-prod-weu" >> $GITHUB_ENV
-            echo "ADMIRO_ENV=prod" >> $GITHUB_ENV
-            echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_PROD }}" >> $GITHUB_ENV
-            echo "CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_PROD }}" >> $GITHUB_ENV
-          fi
+          case "$BR" in
+            dev)
+              {
+                echo "BACK_APP=admiro-backend-dev-weu"
+                echo "ADMIRO_ENV=dev"
+                echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_DEV }}"
+                echo "ADMIRO_CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_DEV }}"
+                echo "ADMIRO_PARQUET_STORAGE_ACCOUNT=${{ secrets.ADMIRO_PARQUET_STORAGE_ACCOUNT }}"
+                echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
+                echo "ADMIRO_PARQUET_PREFIX=v1"
+                echo "ADMIRO_PARQUET_ANON=true"
+              } >> "$GITHUB_ENV"
+              ;;
+            staging)
+              {
+                echo "BACK_APP=admiro-backend-staging-weu"
+                echo "ADMIRO_ENV=staging"
+                echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_STAGING }}"
+                echo "ADMIRO_CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_STAGING }}"
+                echo "ADMIRO_PARQUET_STORAGE_ACCOUNT=${{ secrets.ADMIRO_PARQUET_STORAGE_ACCOUNT }}"
+                echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
+                echo "ADMIRO_PARQUET_PREFIX=v1"
+                echo "ADMIRO_PARQUET_ANON=true"
+              } >> "$GITHUB_ENV"
+              ;;
+            main)
+              {
+                echo "BACK_APP=admiro-backend-prod-weu"
+                echo "ADMIRO_ENV=prod"
+                echo "SWA_TOKEN=${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ADMIRO_PROD }}"
+                echo "ADMIRO_CORS_ORIGINS=${{ secrets.ADMIRO_CORS_ORIGINS_PROD }}"
+                echo "ADMIRO_PARQUET_STORAGE_ACCOUNT=${{ secrets.ADMIRO_PARQUET_STORAGE_ACCOUNT }}"
+                echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
+                echo "ADMIRO_PARQUET_PREFIX=v1"
+                echo "ADMIRO_PARQUET_ANON=true"
+              } >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported branch: $BR" >&2
+              exit 1
+              ;;
+          esac
 
-      - name: Ensure CORS origins value
+      - name: Validate required deployment variables
         shell: bash
         run: |
-          if [ -z "${CORS_ORIGINS:-}" ]; then
-            echo "CORS_ORIGINS=*" >> $GITHUB_ENV
-            echo "ADMIRO_CORS_ORIGINS secret not set for this branch. Falling back to '*'."
-          fi
+          set -euo pipefail
+
+          required_vars=(
+            BACK_APP
+            ADMIRO_ENV
+            SWA_TOKEN
+            ADMIRO_CORS_ORIGINS
+            ADMIRO_PARQUET_STORAGE_ACCOUNT
+            ADMIRO_PARQUET_CONTAINER
+            ADMIRO_PARQUET_PREFIX
+            ADMIRO_PARQUET_ANON
+          )
+
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required value: $var" >&2
+              exit 1
+            fi
+          done
 
       - name: Resolve ACR server
         shell: bash
         run: |
+          set -euo pipefail
           ACR_SERVER=$(az acr show -g "$RG" -n "$ACR_NAME" --query loginServer -o tsv)
-          echo "ACR_SERVER=$ACR_SERVER" >> $GITHUB_ENV
+          echo "ACR_SERVER=$ACR_SERVER" >> "$GITHUB_ENV"
 
-      # ---------- BACKEND ----------
       - name: Refresh mirrored Python base image
         shell: bash
         env:
@@ -111,24 +154,33 @@ jobs:
           echo "No mirrored base image available and import failed."
           exit 1
 
-      - name: Build + push backend (ACR build)
+      - name: Build and push backend
         shell: bash
         run: |
+          set -euo pipefail
           az acr build -g "$RG" -r "$ACR_NAME" \
             -t "admiro-backend:${TAG}" \
             -f backend/Dockerfile \
             ./backend
 
-      - name: Deploy backend
+      - name: Deploy backend image and replace env vars
         shell: bash
         run: |
+          set -euo pipefail
           az containerapp update -g "$RG" -n "$BACK_APP" \
             --image "$ACR_SERVER/admiro-backend:${TAG}" \
-            --set-env-vars ADMIRO_ENV="$ADMIRO_ENV" ADMIRO_CORS_ORIGINS="$CORS_ORIGINS"
+            --replace-env-vars \
+              ADMIRO_ENV="$ADMIRO_ENV" \
+              ADMIRO_CORS_ORIGINS="$ADMIRO_CORS_ORIGINS" \
+              ADMIRO_PARQUET_STORAGE_ACCOUNT="$ADMIRO_PARQUET_STORAGE_ACCOUNT" \
+              ADMIRO_PARQUET_CONTAINER="$ADMIRO_PARQUET_CONTAINER" \
+              ADMIRO_PARQUET_PREFIX="$ADMIRO_PARQUET_PREFIX" \
+              ADMIRO_PARQUET_ANON="$ADMIRO_PARQUET_ANON"
 
       - name: Disable backend auth gate
         shell: bash
         run: |
+          set -euo pipefail
           az containerapp auth update -g "$RG" -n "$BACK_APP" \
             --enabled false \
             --yes
@@ -136,10 +188,11 @@ jobs:
       - name: Resolve backend URL
         shell: bash
         run: |
-          BACK_FQDN=$(az containerapp show -g "$RG" -n "$BACK_APP" --query properties.configuration.ingress.fqdn -o tsv)
-          echo "BACKEND_URL=https://${BACK_FQDN}" >> $GITHUB_ENV
+          set -euo pipefail
+          BACK_FQDN=$(az containerapp show -g "$RG" -n "$BACK_APP" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "BACKEND_URL=https://${BACK_FQDN}" >> "$GITHUB_ENV"
 
-      # ---------- FRONTEND ----------
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -151,6 +204,7 @@ jobs:
         working-directory: frontend
         shell: bash
         run: |
+          set -euo pipefail
           npm ci
           VITE_API_BASE_URL="$BACKEND_URL" npm run build
           cp staticwebapp.config.json dist/
