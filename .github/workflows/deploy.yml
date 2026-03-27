@@ -50,6 +50,11 @@ jobs:
                 echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
                 echo "ADMIRO_PARQUET_PREFIX=v1"
                 echo "ADMIRO_PARQUET_ANON=false"
+                echo "ADMIRO_RESPONSE_CACHE_ENABLED=true"
+                echo "ADMIRO_RESPONSE_CACHE_TTL_SECONDS=600"
+                echo "ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS=16"
+                echo "ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG=8"
+                echo "ADMIRO_SERVER_TIMING_ENABLED=true"
               } >> "$GITHUB_ENV"
               ;;
             staging)
@@ -62,6 +67,11 @@ jobs:
                 echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
                 echo "ADMIRO_PARQUET_PREFIX=v1"
                 echo "ADMIRO_PARQUET_ANON=false"
+                echo "ADMIRO_RESPONSE_CACHE_ENABLED=true"
+                echo "ADMIRO_RESPONSE_CACHE_TTL_SECONDS=600"
+                echo "ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS=16"
+                echo "ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG=8"
+                echo "ADMIRO_SERVER_TIMING_ENABLED=true"
               } >> "$GITHUB_ENV"
               ;;
             main)
@@ -74,6 +84,11 @@ jobs:
                 echo "ADMIRO_PARQUET_CONTAINER=admiro-data"
                 echo "ADMIRO_PARQUET_PREFIX=v1"
                 echo "ADMIRO_PARQUET_ANON=false"
+                echo "ADMIRO_RESPONSE_CACHE_ENABLED=true"
+                echo "ADMIRO_RESPONSE_CACHE_TTL_SECONDS=600"
+                echo "ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS=16"
+                echo "ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG=8"
+                echo "ADMIRO_SERVER_TIMING_ENABLED=true"
               } >> "$GITHUB_ENV"
               ;;
             *)
@@ -96,6 +111,11 @@ jobs:
             ADMIRO_PARQUET_CONTAINER
             ADMIRO_PARQUET_PREFIX
             ADMIRO_PARQUET_ANON
+            ADMIRO_RESPONSE_CACHE_ENABLED
+            ADMIRO_RESPONSE_CACHE_TTL_SECONDS
+            ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS
+            ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG
+            ADMIRO_SERVER_TIMING_ENABLED
           )
 
           for var in "${required_vars[@]}"; do
@@ -154,6 +174,16 @@ jobs:
           echo "No mirrored base image available and import failed."
           exit 1
 
+      - name: Ensure backend has system-assigned identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          az containerapp identity assign \
+            -g "$RG" \
+            -n "$BACK_APP" \
+            --system-assigned
+
+
       - name: Build and push backend
         shell: bash
         run: |
@@ -169,13 +199,22 @@ jobs:
           set -euo pipefail
           az containerapp update -g "$RG" -n "$BACK_APP" \
             --image "$ACR_SERVER/admiro-backend:${TAG}" \
+            --cpu 1 \
+            --memory 2Gi \
+            --min-replicas 1 \
+            --max-replicas 5 \
             --replace-env-vars \
               ADMIRO_ENV="$ADMIRO_ENV" \
               ADMIRO_CORS_ORIGINS="$ADMIRO_CORS_ORIGINS" \
               ADMIRO_PARQUET_STORAGE_ACCOUNT="$ADMIRO_PARQUET_STORAGE_ACCOUNT" \
               ADMIRO_PARQUET_CONTAINER="$ADMIRO_PARQUET_CONTAINER" \
               ADMIRO_PARQUET_PREFIX="$ADMIRO_PARQUET_PREFIX" \
-              ADMIRO_PARQUET_ANON="$ADMIRO_PARQUET_ANON"
+              ADMIRO_PARQUET_ANON="$ADMIRO_PARQUET_ANON" \
+              ADMIRO_RESPONSE_CACHE_ENABLED="$ADMIRO_RESPONSE_CACHE_ENABLED" \
+              ADMIRO_RESPONSE_CACHE_TTL_SECONDS="$ADMIRO_RESPONSE_CACHE_TTL_SECONDS" \
+              ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS="$ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_SUMM_STATS" \
+              ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG="$ADMIRO_RESPONSE_CACHE_MAX_ENTRIES_FRAG_VIS_REG" \
+              ADMIRO_SERVER_TIMING_ENABLED="$ADMIRO_SERVER_TIMING_ENABLED"
 
       - name: Disable backend auth gate
         shell: bash
