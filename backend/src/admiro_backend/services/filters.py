@@ -117,6 +117,18 @@ SUMM_STATS_IND_COLUMNS = [
 
 FRAG_VIS_REG_FREQ_COLUMNS = ["chrom", "position", "n_contain", "n_total", "freq"]
 FRAG_VIS_REG_COMPOSITION_COLUMNS = ["index", "pop_combination", "total_sequence"]
+FRAG_VIS_REG_COMPARISON_COLUMNS = [
+    "chrom",
+    "start",
+    "end",
+    "idx_1",
+    "idx_2",
+    "idx_3",
+    "idx_4",
+    "idx_5",
+    "idx_6",
+    "idx_7",
+]
 
 
 @lru_cache(maxsize=1)
@@ -220,9 +232,10 @@ def _is_blank(value):
 
 
 def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
-    if plot_type not in {"freq", "composition"}:
+    if plot_type not in {"freq", "comparison", "composition"}:
         raise ValueError(
-            f"Unsupported plot_type={plot_type!r}. Expected 'freq' or 'composition'."
+            "Unsupported plot_type="
+            f"{plot_type!r}. Expected 'freq', 'comparison' or 'composition'."
         )
 
     if _is_blank(phase_state):
@@ -242,6 +255,13 @@ def filter_frag_vis_reg(plot_type, phase_state, region, ancestry, mpp):
             raise ValueError("Missing required field 'ancestry' for plot_type='freq'.")
         rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/reg={region}/anc={ancestry}/mpp={mpp_int}/0.parquet"
         required_cols = FRAG_VIS_REG_FREQ_COLUMNS
+    elif plot_type == "comparison":
+        if _is_blank(ancestry):
+            raise ValueError(
+                "Missing required field 'ancestry' for plot_type='comparison'."
+            )
+        rel_path = f"fragments_reg/plot={plot_type}/phase_state={phase_state}/anc={ancestry}/mpp={mpp_int}/0.parquet"
+        required_cols = FRAG_VIS_REG_COMPARISON_COLUMNS
     else:
         if _is_blank(ancestry):
             raise ValueError(

@@ -111,6 +111,68 @@ class FragVisRegFilterTests(unittest.TestCase):
             "fragments_reg/plot=composition/phase_state=PDAT/anc=Denisova/mpp=80/0.parquet"
         )
 
+    def test_returns_comparison_payload(self) -> None:
+        df = pl.DataFrame(
+            {
+                "chrom": ["chr1", "chr1"],
+                "start": [100, 200],
+                "end": [180, 260],
+                "idx_1": [True, False],
+                "idx_2": [False, True],
+                "idx_3": [False, False],
+                "idx_4": [False, False],
+                "idx_5": [False, False],
+                "idx_6": [False, False],
+                "idx_7": [False, False],
+                "extra": ["x", "y"],
+            }
+        )
+
+        with patch(
+            "admiro_backend.services.filters._parq_read_parquet", return_value=df
+        ) as mock_read:
+            result = filter_frag_vis_reg(
+                plot_type="comparison",
+                phase_state="PDAT",
+                region=None,
+                ancestry="nonDAVC",
+                mpp=95,
+            )
+
+        self.assertEqual(
+            result,
+            {
+                "f": "ct1",
+                "c": [
+                    "chrom",
+                    "start",
+                    "end",
+                    "idx_1",
+                    "idx_2",
+                    "idx_3",
+                    "idx_4",
+                    "idx_5",
+                    "idx_6",
+                    "idx_7",
+                ],
+                "v": [
+                    ["chr1", "chr1"],
+                    [100, 200],
+                    [180, 260],
+                    [True, False],
+                    [False, True],
+                    [False, False],
+                    [False, False],
+                    [False, False],
+                    [False, False],
+                    [False, False],
+                ],
+            },
+        )
+        mock_read.assert_called_once_with(
+            "fragments_reg/plot=comparison/phase_state=PDAT/anc=nonDAVC/mpp=95/0.parquet"
+        )
+
     def test_returns_empty_composition_when_parquet_is_missing(self) -> None:
         with patch(
             "admiro_backend.services.filters._parq_read_parquet",
@@ -129,6 +191,38 @@ class FragVisRegFilterTests(unittest.TestCase):
                 "f": "ct1",
                 "c": ["index", "pop_combination", "total_sequence"],
                 "v": [[], [], []],
+            },
+        )
+
+    def test_returns_empty_comparison_when_parquet_is_missing(self) -> None:
+        with patch(
+            "admiro_backend.services.filters._parq_read_parquet",
+            side_effect=FileNotFoundError("missing"),
+        ):
+            result = filter_frag_vis_reg(
+                plot_type="comparison",
+                phase_state="DATA",
+                region=None,
+                ancestry="nonDAVC",
+                mpp=95,
+            )
+        self.assertEqual(
+            result,
+            {
+                "f": "ct1",
+                "c": [
+                    "chrom",
+                    "start",
+                    "end",
+                    "idx_1",
+                    "idx_2",
+                    "idx_3",
+                    "idx_4",
+                    "idx_5",
+                    "idx_6",
+                    "idx_7",
+                ],
+                "v": [[], [], [], [], [], [], [], [], [], []],
             },
         )
 
@@ -177,6 +271,30 @@ class FragVisRegFilterTests(unittest.TestCase):
 
         self.assertIn("Missing required columns", str(ctx.exception))
         self.assertIn("pop_combination", str(ctx.exception))
+
+    def test_raises_when_comparison_columns_are_missing(self) -> None:
+        df = pl.DataFrame(
+            {
+                "chrom": ["chr1"],
+                "start": [100],
+                "end": [200],
+                "idx_1": [True],
+                "idx_2": [False],
+            }
+        )
+
+        with patch("admiro_backend.services.filters._parq_read_parquet", return_value=df):
+            with self.assertRaises(ValueError) as ctx:
+                filter_frag_vis_reg(
+                    plot_type="comparison",
+                    phase_state="DATA",
+                    region=None,
+                    ancestry="nonDAVC",
+                    mpp=95,
+                )
+
+        self.assertIn("Missing required columns", str(ctx.exception))
+        self.assertIn("idx_3", str(ctx.exception))
 
     def test_raises_on_unsupported_plot_type(self) -> None:
         with self.assertRaises(ValueError):
@@ -265,7 +383,7 @@ class FragVisRegRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), payload)
 
-    def test_fragvisreg_route_returns_400_on_non_freq_plot(self) -> None:
+    def test_fragvisreg_route_returns_400_on_unsupported_plot_type(self) -> None:
         response = self.client.post(
             "/api/fragvisreg-data",
             json={
@@ -279,6 +397,37 @@ class FragVisRegRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Unsupported plot_type", response.json()["detail"])
+
+    def test_fragvisreg_route_returns_comparison_payload_without_region(self) -> None:
+        payload = {
+            "f": "ct1",
+            "c": [
+                "chrom",
+                "start",
+                "end",
+                "idx_1",
+                "idx_2",
+                "idx_3",
+                "idx_4",
+                "idx_5",
+                "idx_6",
+                "idx_7",
+            ],
+            "v": [["chr1"], [100], [200], [True], [False], [False], [False], [False], [False], [False]],
+        }
+        with patch("admiro_backend.api.routes.filter_frag_vis_reg", return_value=payload):
+            response = self.client.post(
+                "/api/fragvisreg-data",
+                json={
+                    "plot_type": "comparison",
+                    "phase_state": "PDAT",
+                    "ancestry": "nonDAVC",
+                    "mpp": 95,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), payload)
 
     def test_fragvisreg_route_returns_400_on_value_error(self) -> None:
         with patch(
