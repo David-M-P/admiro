@@ -1,4 +1,10 @@
 import { anc_cmaps } from "@/assets/colormaps";
+import {
+  getVisibleNonCodingIntervals,
+  NonCodingMask,
+  toPixelMergedIntervals,
+  useNonCodingMask,
+} from "@/assets/nonCodingMask";
 import { variables } from "@/assets/sharedOptions";
 import { chrlen } from "@/assets/StaticData";
 import { DataPoint } from "@/pages/frag_vis_ind/static/fviStatic";
@@ -167,6 +173,7 @@ const ChromosomeComponent: React.FC<ChromosomeProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const nonCodingMask = useNonCodingMask();
   useEffect(() => {
     if (svgRef.current && Array.isArray(data) && data.length > 0) {
       plotChromosomes(
@@ -178,10 +185,11 @@ const ChromosomeComponent: React.FC<ChromosomeProps> = ({
         mpp,
         chrms_limits,
         min_length,
-        color
+        color,
+        nonCodingMask
       );
     }
-  }, [data, chrms, chrms_limits, mpp, min_length, color]);
+  }, [color, chrms, chrms_limits, data, min_length, mpp, nonCodingMask]);
 
   const handleResize = () => {
     if (!containerRef.current || !svgRef.current || !data) return;
@@ -204,7 +212,8 @@ const ChromosomeComponent: React.FC<ChromosomeProps> = ({
       mpp,
       chrms_limits,
       min_length,
-      color
+      color,
+      nonCodingMask
     );
   };
 
@@ -217,7 +226,7 @@ const ChromosomeComponent: React.FC<ChromosomeProps> = ({
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, [data, chrms, lin, ancs, chrms_limits, mpp, min_length, color]);
+  }, [ancs, chrms, chrms_limits, color, data, lin, min_length, mpp, nonCodingMask]);
 
   useEffect(() => {
     // Handle resize when the sidebar visibility changes
@@ -245,7 +254,8 @@ const plotChromosomes = (
   mpp: number,
   chrms_limits: [number, number],
   min_length: number,
-  color: string
+  color: string,
+  nonCodingMask: NonCodingMask | null
 ) => {
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
@@ -372,6 +382,8 @@ const plotChromosomes = (
     .scaleLinear()
     .domain([chrms_limits[0] * 1000, chrms_limits[1] * 1000])
     .range([0, plotWidth * 0.95]);
+  const domainStartBp = Math.min(chrms_limits[0], chrms_limits[1]) * 1000;
+  const domainEndBp = Math.max(chrms_limits[0], chrms_limits[1]) * 1000;
 
   const chrmsCount = chrms.length;
   const chrPadding = 10; // Padding between chromosomes
@@ -400,6 +412,43 @@ const plotChromosomes = (
       .attr("height", chrHeight)
       .attr("fill", "white")
       .attr("stroke", "black");
+
+    const chromosomeVisibleStart = Math.max(0, domainStartBp);
+    const chromosomeVisibleEnd = Math.min(chromLength, domainEndBp);
+    const nonCodingOverlayRectangles = toPixelMergedIntervals(
+      getVisibleNonCodingIntervals(
+        nonCodingMask,
+        chrom,
+        chromosomeVisibleStart,
+        chromosomeVisibleEnd
+      ),
+      (positionBp) => xScale(positionBp)
+    )
+      .map((interval) => {
+        const left = Math.max(0, interval.x);
+        const right = Math.min(scaledChromWidth, interval.x + interval.width);
+        return {
+          x: left,
+          width: Math.max(0, right - left),
+        };
+      })
+      .filter((interval) => interval.width > 0);
+
+    if (nonCodingOverlayRectangles.length > 0) {
+      svg
+        .append("g")
+        .selectAll("rect.noncoding-mask")
+        .data(nonCodingOverlayRectangles)
+        .join("rect")
+        .attr("class", "noncoding-mask")
+        .attr("x", (interval) => interval.x)
+        .attr("y", yPos)
+        .attr("width", (interval) => interval.width)
+        .attr("height", chrHeight)
+        .attr("fill", "#64748b")
+        .attr("fill-opacity", 0.22);
+    }
+
     svg
       .append("text")
       .attr("x", -10) // Position the label slightly to the left of the chromosome

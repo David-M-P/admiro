@@ -6,6 +6,7 @@ import type {
   SummStatPlotType,
   SummStatRegionOption,
 } from "@/pages/sum_stats_ind/config/options";
+import type { SummStatFragPlotType } from "@/pages/sum_stats_frag/config/options";
 import type {
   ColorScaleResult,
   CommonFilterInput,
@@ -60,4 +61,30 @@ export interface FragVisFilterState {
   chrms_limits: [number, number];
   min_length: number;
   color: string;
+}
+
+export interface SummStatFragFilterState {
+  tree_lin: string[];
+  mpp: number;
+  ancs: string[];
+  chrms: string[];
+  var_1: string;
+  var_2_1: string;
+  var_2_2: string;
+  col: string[];
+  fac_x: string[];
+  fac_y: string[];
+  mea_med_1: boolean;
+  mea_med_x: boolean;
+  mea_med_y: boolean;
+  plot: SummStatFragPlotType | "";
+  n_bins: number;
+  x_axis: AxisMode;
+  min_x_axis: number;
+  max_x_axis: number;
+  y_axis: AxisMode;
+  min_y_axis: number;
+  max_y_axis: number;
+  bandwidth_divisor: number;
+  thresholds: number;
 }

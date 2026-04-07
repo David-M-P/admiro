@@ -1,10 +1,10 @@
 import { ancestries_noAll, chrms_all } from "@/assets/sharedOptions";
 import { PageWithSidebar } from "@/layout/PageWithSidebar";
+import { apiUrl } from "@/lib/api-url";
+import { decodeObjectRowsPayload } from "@/lib/compact-table";
 import ChromosomeComponent from "@/pages/frag_vis_ind/components/ChromosomeComponent";
 import SideFilter from "@/pages/frag_vis_ind/components/SideFilter";
 import { DataPoint } from "@/pages/frag_vis_ind/static/fviStatic";
-import { apiUrl } from "@/lib/api-url";
-import { decodeObjectRowsPayload } from "@/lib/compact-table";
 import PlotDownloadButton from "@/shared/PlotDownloadButton/PlotDownloadButton";
 import { useSidebar } from "@/shared/SideBarContext/SideBarContext";
 import { FragVisFilterState } from "@/types/filter-state";
@@ -54,6 +54,7 @@ export function FragVisInd() {
       }
 
       const fetchedData = await response.json();
+      console.log(fetchedData)
       setData(decodeObjectRowsPayload<DataPoint>(fetchedData));
       setIsFiltersApplied(true);
     } catch (error) {

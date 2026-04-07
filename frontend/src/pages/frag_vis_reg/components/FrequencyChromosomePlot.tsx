@@ -1,5 +1,11 @@
 import { chrlen } from "@/assets/StaticData";
 import {
+  getVisibleNonCodingIntervals,
+  NonCodingMask,
+  toPixelMergedIntervals,
+  useNonCodingMask,
+} from "@/assets/nonCodingMask";
+import {
   FrequencyLineState,
   FrequencyRow,
   getFrequencyLineColor,
@@ -166,7 +172,8 @@ const drawPlot = (
   lines: FrequencyLineState[],
   chromosomes: string[],
   chrmsLimits: [number, number],
-  smoothingWindowKbp: number
+  smoothingWindowKbp: number,
+  nonCodingMask: NonCodingMask | null
 ) => {
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
@@ -249,6 +256,40 @@ const drawPlot = (
       .attr("height", chrHeight)
       .attr("fill", "white")
       .attr("stroke", "black");
+
+    const nonCodingOverlayRectangles = toPixelMergedIntervals(
+      getVisibleNonCodingIntervals(
+        nonCodingMask,
+        chromosome,
+        chromosomeVisibleStart,
+        chromosomeVisibleEnd
+      ),
+      (positionBp) => xScale(positionBp)
+    )
+      .map((interval) => {
+        const left = Math.max(0, interval.x);
+        const right = Math.min(chromosomeWidth, interval.x + interval.width);
+        return {
+          x: left,
+          width: Math.max(0, right - left),
+        };
+      })
+      .filter((interval) => interval.width > 0);
+
+    if (nonCodingOverlayRectangles.length > 0) {
+      svg
+        .append("g")
+        .selectAll("rect.noncoding-mask")
+        .data(nonCodingOverlayRectangles)
+        .join("rect")
+        .attr("class", "noncoding-mask")
+        .attr("x", (interval) => interval.x)
+        .attr("y", yPos)
+        .attr("width", (interval) => interval.width)
+        .attr("height", chrHeight)
+        .attr("fill", "#64748b")
+        .attr("fill-opacity", 0.22);
+    }
 
     svg
       .append("text")
@@ -366,6 +407,7 @@ const FrequencyChromosomePlot = ({
 }: FrequencyChromosomePlotProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const nonCodingMask = useNonCodingMask();
 
   const redraw = useCallback(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -375,8 +417,8 @@ const FrequencyChromosomePlot = ({
       d3.select(containerRef.current).selectAll(".tooltip").remove();
       return;
     }
-    drawPlot(svgRef.current, lines, chrms, chrmsLimits, smoothingWindowKbp);
-  }, [chrms, chrmsLimits, lines, smoothingWindowKbp]);
+    drawPlot(svgRef.current, lines, chrms, chrmsLimits, smoothingWindowKbp, nonCodingMask);
+  }, [chrms, chrmsLimits, lines, nonCodingMask, smoothingWindowKbp]);
 
   useEffect(() => {
     redraw();
