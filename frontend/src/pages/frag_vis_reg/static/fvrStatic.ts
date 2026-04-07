@@ -239,14 +239,12 @@ export const FREQUENCY_SMOOTHING_WINDOW_MARKS = [
 ];
 
 export const COMPARISON_MIN_FRAGMENT_LENGTH_MIN_KBP = 0;
-export const COMPARISON_MIN_FRAGMENT_LENGTH_MAX_KBP = 10000;
+export const COMPARISON_MIN_FRAGMENT_LENGTH_MAX_KBP = 1000;
 export const COMPARISON_MIN_FRAGMENT_LENGTH_STEP_KBP = 50;
 export const DEFAULT_COMPARISON_MIN_FRAGMENT_LENGTH_KBP = 0;
 export const COMPARISON_MIN_FRAGMENT_LENGTH_MARKS = [
   { value: 0, label: "0" },
-  { value: 1000, label: "1,000" },
-  { value: 5000, label: "5,000" },
-  { value: 10000, label: "10,000" },
+  { value: 1000, label: "1,000" }
 ];
 
 export const DEFAULT_FREQUENCY_LINE_FILTERS: FrequencyLineFilters = {

@@ -1,5 +1,11 @@
 import { chrlen } from "@/assets/StaticData";
 import {
+  getVisibleNonCodingIntervals,
+  NonCodingMask,
+  toPixelMergedIntervals,
+  useNonCodingMask,
+} from "@/assets/nonCodingMask";
+import {
   COMPARISON_REGION_CODE_ORDER,
   ComparisonLineState,
   getComparisonLineLabel,
@@ -55,7 +61,8 @@ const drawPlot = (
   svgElement: SVGSVGElement,
   lines: ComparisonLineState[],
   chromosomes: string[],
-  chrmsLimits: [number, number]
+  chrmsLimits: [number, number],
+  nonCodingMask: NonCodingMask | null
 ) => {
   d3.select(svgElement).selectAll("*").remove();
   const container = svgElement.parentElement;
@@ -86,6 +93,9 @@ const drawPlot = (
     .filter((line) => line.visible)
     .slice()
     .sort((a, b) => a.lineId - b.lineId);
+  // console.log("Comparison rows plotted", orderedChromosomes.flatMap((chromosome) =>
+  //   activeLines.flatMap((line) => getRowsForChromosome(line, chromosome, limitStartBp, limitEndBp))
+  // ));
 
   const svg = d3
     .select(svgElement)
@@ -140,6 +150,40 @@ const drawPlot = (
       .attr("height", chrHeight)
       .attr("fill", "white")
       .attr("stroke", "black");
+
+    const nonCodingOverlayRectangles = toPixelMergedIntervals(
+      getVisibleNonCodingIntervals(
+        nonCodingMask,
+        chromosome,
+        chromosomeVisibleStart,
+        chromosomeVisibleEnd
+      ),
+      (positionBp) => xScale(positionBp)
+    )
+      .map((interval) => {
+        const left = Math.max(0, interval.x);
+        const right = Math.min(chromosomeWidth, interval.x + interval.width);
+        return {
+          x: left,
+          width: Math.max(0, right - left),
+        };
+      })
+      .filter((interval) => interval.width > 0);
+
+    if (nonCodingOverlayRectangles.length > 0) {
+      svg
+        .append("g")
+        .selectAll("rect.noncoding-mask")
+        .data(nonCodingOverlayRectangles)
+        .join("rect")
+        .attr("class", "noncoding-mask")
+        .attr("x", (interval) => interval.x)
+        .attr("y", yPos)
+        .attr("width", (interval) => interval.width)
+        .attr("height", chrHeight)
+        .attr("fill", "#64748b")
+        .attr("fill-opacity", 0.22);
+    }
 
     svg
       .append("text")
@@ -215,6 +259,7 @@ const ComparisonChromosomePlot = ({
 }: ComparisonChromosomePlotProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const nonCodingMask = useNonCodingMask();
 
   const redraw = useCallback(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -224,8 +269,8 @@ const ComparisonChromosomePlot = ({
       d3.select(containerRef.current).selectAll(".tooltip").remove();
       return;
     }
-    drawPlot(svgRef.current, lines, chrms, chrmsLimits);
-  }, [chrms, chrmsLimits, lines]);
+    drawPlot(svgRef.current, lines, chrms, chrmsLimits, nonCodingMask);
+  }, [chrms, chrmsLimits, lines, nonCodingMask]);
 
   useEffect(() => {
     redraw();
