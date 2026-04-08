@@ -33,7 +33,7 @@ export const INITIAL_SUMM_FILTERS: SummStatFilterState = {
   map_ind_rad: 3,
   map_lat_jit: 1,
   map_lon_jit: 1,
-  tree_lin: [],
+  tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
   bandwidth_divisor: 30,
   thresholds: 10,
 };
