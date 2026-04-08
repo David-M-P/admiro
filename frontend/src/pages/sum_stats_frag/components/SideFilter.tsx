@@ -1,6 +1,6 @@
 import { icons } from "@/assets/icons";
 import { checkboxBoxStyles } from "@/assets/styles";
-import { DEFAULTS_BY_PLOT } from "@/pages/sum_stats_frag/config/defaultFilters";
+import { DEFAULTS_BY_PLOT, INITIAL_SUMM_FRAG_FILTERS } from "@/pages/sum_stats_frag/config/defaultFilters";
 import {
   SUMM_STAT_FRAG_PLOT_OPTIONS_DOUBLE,
   SUMM_STAT_FRAG_PLOT_OPTIONS_SINGLE,
@@ -60,6 +60,119 @@ const toStringArray = (value: unknown): string[] => {
 
 const defaultPlotForDimension = (dimension: number): SummStatFragPlotType =>
   dimension === 0 ? "Histogram" : "Points";
+
+const getPlotDefault = <K extends keyof SummStatFragFilterState>(
+  plotType: SummStatFragPlotType,
+  key: K,
+): SummStatFragFilterState[K] => {
+  const defaults = DEFAULTS_BY_PLOT[plotType];
+  return (defaults?.[key] ?? INITIAL_SUMM_FRAG_FILTERS[key]) as SummStatFragFilterState[K];
+};
+
+const hasSelectedPlotOptions = (filters: SummStatFragFilterState): boolean => {
+  return (
+    filters.var_1.length > 0 ||
+    filters.var_2_1.length > 0 ||
+    filters.var_2_2.length > 0 ||
+    filters.tree_lin.length > 0 ||
+    filters.ancs.length > 0 ||
+    filters.chrms.length > 0 ||
+    filters.col.length > 0 ||
+    filters.fac_x.length > 0 ||
+    filters.fac_y.length > 0 ||
+    filters.mpp !== INITIAL_SUMM_FRAG_FILTERS.mpp
+  );
+};
+
+const applyPlotSwitchRules = (
+  prevFilters: SummStatFragFilterState,
+  plotType: SummStatFragPlotType,
+): SummStatFragFilterState => {
+  const defaults = DEFAULTS_BY_PLOT[plotType] ?? {};
+  const applyFullDefaults = !hasSelectedPlotOptions(prevFilters);
+
+  let nextFilters: SummStatFragFilterState = applyFullDefaults
+    ? ({ ...prevFilters, plot: plotType, ...defaults } as SummStatFragFilterState)
+    : { ...prevFilters, plot: plotType };
+
+  if (plotType === "Histogram" || plotType === "Density" || plotType === "Violin") {
+    if (!nextFilters.var_1) {
+      nextFilters.var_1 = getPlotDefault(plotType, "var_1");
+    }
+  }
+
+  if (plotType === "Points" || plotType === "2D Density") {
+    if (!nextFilters.var_2_1) nextFilters.var_2_1 = getPlotDefault(plotType, "var_2_1");
+    if (!nextFilters.var_2_2) nextFilters.var_2_2 = getPlotDefault(plotType, "var_2_2");
+  }
+
+  switch (plotType) {
+    case "Violin":
+      nextFilters.var_1 = isContinuousColumn(nextFilters.var_1)
+        ? nextFilters.var_1
+        : getPlotDefault("Violin", "var_1");
+      return {
+        ...nextFilters,
+        // Violin does not expose x-axis controls; keep it neutral and reset bounds.
+        x_axis: "Shared Axis",
+        min_x_axis: INITIAL_SUMM_FRAG_FILTERS.min_x_axis,
+        max_x_axis: INITIAL_SUMM_FRAG_FILTERS.max_x_axis,
+        y_axis: "Shared Axis",
+        min_y_axis: getPlotDefault("Violin", "min_y_axis"),
+        max_y_axis: getPlotDefault("Violin", "max_y_axis"),
+        fac_y: [],
+        bandwidth_divisor: getPlotDefault("Violin", "bandwidth_divisor"),
+      };
+    case "Histogram":
+      return {
+        ...nextFilters,
+        x_axis: "Shared Axis",
+        min_x_axis: getPlotDefault("Histogram", "min_x_axis"),
+        max_x_axis: getPlotDefault("Histogram", "max_x_axis"),
+        y_axis: "Free Axis",
+        min_y_axis: getPlotDefault("Histogram", "min_y_axis"),
+        max_y_axis: getPlotDefault("Histogram", "max_y_axis"),
+      };
+    case "Density":
+      nextFilters.var_1 = isContinuousColumn(nextFilters.var_1)
+        ? nextFilters.var_1
+        : getPlotDefault("Density", "var_1");
+      return {
+        ...nextFilters,
+        x_axis: "Shared Axis",
+        min_x_axis: getPlotDefault("Density", "min_x_axis"),
+        max_x_axis: getPlotDefault("Density", "max_x_axis"),
+        y_axis: "Free Axis",
+        min_y_axis: getPlotDefault("Density", "min_y_axis"),
+        max_y_axis: getPlotDefault("Density", "max_y_axis"),
+        bandwidth_divisor: getPlotDefault("Density", "bandwidth_divisor"),
+      };
+    case "Points":
+      return {
+        ...nextFilters,
+        x_axis: "Shared Axis",
+        min_x_axis: getPlotDefault("Points", "min_x_axis"),
+        max_x_axis: getPlotDefault("Points", "max_x_axis"),
+        y_axis: "Shared Axis",
+        min_y_axis: getPlotDefault("Points", "min_y_axis"),
+        max_y_axis: getPlotDefault("Points", "max_y_axis"),
+      };
+    case "2D Density":
+      return {
+        ...nextFilters,
+        x_axis: "Shared Axis",
+        min_x_axis: getPlotDefault("2D Density", "min_x_axis"),
+        max_x_axis: getPlotDefault("2D Density", "max_x_axis"),
+        y_axis: "Shared Axis",
+        min_y_axis: getPlotDefault("2D Density", "min_y_axis"),
+        max_y_axis: getPlotDefault("2D Density", "max_y_axis"),
+        bandwidth_divisor: getPlotDefault("2D Density", "bandwidth_divisor"),
+        thresholds: getPlotDefault("2D Density", "thresholds"),
+      };
+    default:
+      return nextFilters;
+  }
+};
 
 const SideFilter = ({
   tabValue,
@@ -122,24 +235,13 @@ const SideFilter = ({
 
     setTabValue(newValue);
     const nextPlot = defaultPlotForDimension(newValue);
-    const defaultValues = DEFAULTS_BY_PLOT[nextPlot] ?? {};
-
-    setFilters((prevFilters) => ({
-      ...prevFilters,
-      plot: nextPlot,
-      ...defaultValues,
-    }));
+    setFilters((prevFilters) => applyPlotSwitchRules(prevFilters, nextPlot));
   };
 
   const handlePlotChange = (_event: ReactMouseEvent<HTMLElement>, newPlot: string | null) => {
     if (newPlot == null) return;
     const plotType = newPlot as SummStatFragPlotType;
-    const defaultValues = DEFAULTS_BY_PLOT[plotType] ?? {};
-    setFilters((prevFilters) => ({
-      ...prevFilters,
-      plot: plotType,
-      ...defaultValues,
-    }));
+    setFilters((prevFilters) => applyPlotSwitchRules(prevFilters, plotType));
   };
 
   const handleTreeSelection = (selectedItems: string[]) => {

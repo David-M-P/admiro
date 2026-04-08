@@ -82,15 +82,29 @@ export function SummStatInd() {
 
   const mapArray = (vals: string[], map: Record<string, string>) =>
     vals.map((v) => map[v] ?? v);
+  const normalizeSelection = (vals: string[]) => [...vals].sort().join("|");
   const [data, setData] = useState<DataPoint[]>([]); // For holding the fetched data
   const [isFiltersApplied, setIsFiltersApplied] = useState(false); // To check if filters are applied
   const [loading, setLoading] = useState(false); // To handle loading state
+  const [lastAppliedRequest, setLastAppliedRequest] = useState<{
+    phases: string[];
+    mpp: number;
+  } | null>(null);
   const [mapRefreshKey, setMapRefreshKey] = useState(0);
   useEffect(() => {
-    if (filters.plot) {
-      applyFilters();
+    if (!filters.plot) return;
+
+    const currentPhases = mapArray(filters.phases, mapping.values.phase_state.toShort);
+    const currentMpp = Math.round(filters.mpp_1 * 100);
+    const dataRequestChanged =
+      !lastAppliedRequest ||
+      lastAppliedRequest.mpp !== currentMpp ||
+      normalizeSelection(lastAppliedRequest.phases) !== normalizeSelection(currentPhases);
+
+    if (!isFiltersApplied || dataRequestChanged) {
+      void applyFilters();
     }
-  }, [filters.plot]);
+  }, [filters.plot, isFiltersApplied, lastAppliedRequest]);
   const applyFilters = async () => {
     setLoading(true);
 
@@ -107,6 +121,10 @@ export function SummStatInd() {
         // ancs_1: mapArray(filters.ancs_1, mapping.values.anc.toShort),
         // chrms_1: mapArray(filters.chrms_1, mapping.values.chrom.toShort),
       };
+      const requestDescriptor = {
+        phases: [...payload.phases],
+        mpp: payload.mpp,
+      };
 
       const cacheKey = buildSessionCacheKey(SUMM_STATS_ENDPOINT, payload);
       const cachedRows = SUMM_STATS_SESSION_CACHE.get(cacheKey);
@@ -119,6 +137,7 @@ export function SummStatInd() {
           `summ-stats fetch: 0.0 ms | json: 0.0 ms | total: ${(t1 - t0).toFixed(1)} ms | cache: HIT | transfer: skipped`
         );
         setData(cachedRows);
+        setLastAppliedRequest(requestDescriptor);
         setIsFiltersApplied(true);
         return;
       }
@@ -159,6 +178,7 @@ export function SummStatInd() {
 
       // ✅ store short-keyed rows
       setData(rows);
+      setLastAppliedRequest(requestDescriptor);
       setIsFiltersApplied(true);
     } catch (error) {
       console.error("Error:", error);
