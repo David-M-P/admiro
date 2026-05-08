@@ -333,6 +333,8 @@ const MapComponent = ({
             ${d.ancAFR !== null ? `<strong>Ancestry AFR:</strong> ${formatValue(d.ancAFR)}<br/>` : ''}
             ${d.ancEUR !== null ? `<strong>Ancestry EUR:</strong> ${formatValue(d.ancEUR)}<br/>` : ''}
             ${d.ancOCE !== null ? `<strong>Ancestry OCE:</strong> ${formatValue(d.ancOCE)}<br/>` : ''}
+            ${d.ancOCE2 !== null ? `<strong>Ancestry OCE2:</strong> ${formatValue(d.ancOCE2)}<br/>` : ''}
+            ${d.ancMID !== null ? `<strong>Ancestry MID:</strong> ${formatValue(d.ancMID)}<br/>` : ''}
           </div>
         `);
     };

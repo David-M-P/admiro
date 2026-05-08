@@ -290,6 +290,7 @@ const plotChromosomes = (
 
     const htmlContent = `
     <strong>Individual:</strong> ${d.Individual}<br/>
+    <strong>Sex:</strong> ${d.Sex}<br/>
     <strong>Dataset:</strong> ${d.Dataset}<br/>
     <strong>Region:</strong> ${d.Region}<br/>
     <strong>Population:</strong> ${d.Population}<br/>
@@ -326,7 +327,6 @@ const plotChromosomes = (
     <strong>Shared Neanderthal:</strong> ${d["Shared Neanderthal"]}<br/>
     <strong>Shared Archaic:</strong> ${d["Shared Archaic"]}<br/>
 
-    <strong>Sex:</strong> ${d.Sex}<br/>
     <strong>Phase State:</strong> ${d["Phase State"]}<br/>
     <strong>Individual_Phase:</strong> ${d.Individual_Phase}<br/>
   `;

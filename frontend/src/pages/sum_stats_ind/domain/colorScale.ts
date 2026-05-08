@@ -93,7 +93,7 @@ export const buildColorScale = <T extends DataRow>({
     }
 
     const extent: [number, number] = [minimum, maximum];
-    const colorScale = d3.scaleSequential(d3.interpolateViridis).domain(extent);
+    const colorScale = d3.scaleSequential(d3.interpolateTurbo).domain(extent);
 
     return {
       getColor: (row) => {

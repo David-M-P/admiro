@@ -59,7 +59,7 @@ export const DEFAULTS_BY_PLOT: Record<
     y_axis: "Shared Axis",
     min_y_axis: 0,
     max_y_axis: 0,
-    tree_lin: [],
+    tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
     bandwidth_divisor: 30,
   },
   Density: {
@@ -79,7 +79,7 @@ export const DEFAULTS_BY_PLOT: Record<
     y_axis: "Free Axis",
     min_y_axis: 0,
     max_y_axis: 0,
-    tree_lin: [],
+    tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
     bandwidth_divisor: 10,
   },
   Histogram: {
@@ -100,7 +100,7 @@ export const DEFAULTS_BY_PLOT: Record<
     y_axis: "Free Axis",
     min_y_axis: 0,
     max_y_axis: 0,
-    tree_lin: [],
+    tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
   },
   Map: {
     map_data: true,
@@ -118,6 +118,7 @@ export const DEFAULTS_BY_PLOT: Record<
     map_ind_rad: 3,
     map_lat_jit: 1,
     map_lon_jit: 1,
+    tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
   },
   Points: {
     var_2_1: "Mean Length (bp)",
@@ -139,7 +140,7 @@ export const DEFAULTS_BY_PLOT: Record<
     y_axis: "Shared Axis",
     min_y_axis: 0,
     max_y_axis: 0,
-    tree_lin: ["HGDP00535_HGDP", "HGDP00535_PGNO", "HG02351_1KGP"],
+    tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
   },
   "2D Density": {
     var_2_1: "Mean Length (bp)",
@@ -160,7 +161,7 @@ export const DEFAULTS_BY_PLOT: Record<
     y_axis: "Shared Axis",
     min_y_axis: 0,
     max_y_axis: 0,
-    tree_lin: [],
+    tree_lin: ["HG01108_unphased", "HG01241_unphased", "HG01243_unphased", "HG01242_unphased", "HGDP01261_unphased", "HG01109_unphased", "HG01108_phased", "HG01241_phased", "HG01243_phased", "HG01242_phased", "HGDP01261_phased", "HG01109_phased"],
     bandwidth_divisor: 10,
     thresholds: 10,
   },
